@@ -1310,7 +1310,8 @@ async function carregarRNCs() {
     const podeEditar=currentProfile?.role==='admin';
     const btnAv=rnc.status!=='FECHADA'?`<button class="btn-tiny" onclick="abrirModalStatus(${rnc.id},'${rnc.status}')">Avançar</button>`:'';
     const btnDel=podeEditar?`<button class="btn-tiny danger" onclick="deletarRNC(${rnc.id})">✕</button>`:'';
-    return `<tr><td style="font-weight:600">${rnc.numero_rnc}</td><td>${rnc.romaneio_numero||'—'}</td><td>${rnc.nota_fiscal||'—'}</td><td>${df}</td><td>${pos}</td><td class="muted">${tipo}</td><td style="font-weight:600;color:var(--accent2)">${qtdNc}</td><td>${badge}</td><td>${rnc.numero_sac||'—'}</td><td>${dAt}</td><td>${rnc.nf_fechamento||'—'}</td><td>${dFe}</td><td>${rnc.qtd_recebida_rnc||'—'}</td><td class="${daysCls}">${days}d</td><td class="muted">${ult?.feito_por_nome||'—'}</td><td style="display:flex;gap:.3rem">${btnAv}${btnDel}</td></tr>`;
+    const btn2via=`<button class="btn-tiny" onclick="segundaVia(${rnc.id})" title="2ª via PDF">PDF</button>`;
+    return `<tr><td style="font-weight:600">${rnc.numero_rnc}</td><td>${rnc.romaneio_numero||'—'}</td><td>${rnc.nota_fiscal||'—'}</td><td>${df}</td><td>${pos}</td><td class="muted">${tipo}</td><td style="font-weight:600;color:var(--accent2)">${qtdNc}</td><td>${badge}</td><td>${rnc.numero_sac||'—'}</td><td>${dAt}</td><td>${rnc.nf_fechamento||'—'}</td><td>${dFe}</td><td>${rnc.qtd_recebida_rnc||'—'}</td><td class="${daysCls}">${days}d</td><td class="muted">${ult?.feito_por_nome||'—'}</td><td style="display:flex;gap:.3rem">${btn2via}${btnAv}${btnDel}</td></tr>`;
   }).join('')}</tbody></table></div>`;
 }
 
@@ -1344,24 +1345,52 @@ function fecharModalStatus() { $('modalStatus').style.display='none'; modalStatu
 
 async function salvarStatus(proximo) {
   if(!modalStatusRNC) return;
-  const upd = { status: proximo, atualizado_por: currentUser.id };
-  const campos = {};
-  if(proximo==='GERENCIADA') {
-    upd.numero_sac = document.getElementById('mSac')?.value?.trim()||null;
-    upd.data_atendimento = document.getElementById('mDtAt')?.value||null;
-    campos.numero_sac=upd.numero_sac; campos.data_atendimento=upd.data_atendimento;
-  } else {
-    upd.nf_fechamento=document.getElementById('mNFFech')?.value?.trim()||null;
-    upd.data_fechamento=document.getElementById('mDtFech')?.value||null;
-    upd.qtd_recebida_rnc=parseFloat(document.getElementById('mQtdRec')?.value||'0')||null;
-    campos.nf_fechamento=upd.nf_fechamento; campos.data_fechamento=upd.data_fechamento; campos.qtd_recebida_rnc=upd.qtd_recebida_rnc;
+  const btn = $('modalStatusSalvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const upd = { status: proximo, atualizado_por: currentUser.id };
+    const campos = {};
+    if(proximo==='GERENCIADA') {
+      upd.numero_sac = document.getElementById('mSac')?.value?.trim()||null;
+      upd.data_atendimento = document.getElementById('mDtAt')?.value||null;
+      campos.numero_sac=upd.numero_sac; campos.data_atendimento=upd.data_atendimento;
+    } else {
+      upd.nf_fechamento=document.getElementById('mNFFech')?.value?.trim()||null;
+      upd.data_fechamento=document.getElementById('mDtFech')?.value||null;
+      upd.qtd_recebida_rnc=parseFloat(document.getElementById('mQtdRec')?.value||'0')||null;
+      campos.nf_fechamento=upd.nf_fechamento; campos.data_fechamento=upd.data_fechamento; campos.qtd_recebida_rnc=upd.qtd_recebida_rnc;
+    }
+    const {error}=await sb.from('rncs').update(upd).eq('id',modalStatusRNC.id);
+    if(error) throw new Error(error.message);
+    await sb.from('rnc_atualizacoes').insert({rnc_id:modalStatusRNC.id,status_de:modalStatusRNC.statusAtual,status_para:proximo,campos,feito_por:currentUser.id,feito_por_nome:currentProfile?.nome||currentUser.email});
+    fecharModalStatus();
+    addAlert('success',`Status atualizado para ${proximo}!`,'Registro salvo com auditoria.');
+    carregarRNCs();
+  } catch(err) {
+    addAlert('error','Erro ao atualizar status', err.message||String(err));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar';
   }
-  const {error}=await sb.from('rncs').update(upd).eq('id',modalStatusRNC.id);
-  if(error){addAlert('error','Erro ao atualizar',error.message);return;}
-  await sb.from('rnc_atualizacoes').insert({rnc_id:modalStatusRNC.id,status_de:modalStatusRNC.statusAtual,status_para:proximo,campos,feito_por:currentUser.id,feito_por_nome:currentProfile?.nome||currentUser.email});
-  fecharModalStatus();
-  addAlert('success',`Status atualizado para ${proximo}!','Registro salvo com auditoria.'`);
-  carregarRNCs();
+}
+
+async function segundaVia(id) {
+  const {data:rnc,error} = await sb.from('rncs').select('*, rnc_itens(*)').eq('id',id).single();
+  if(error||!rnc){ addAlert('error','RNC não encontrada',error?.message||''); return; }
+  const nc = {
+    numero_rnc: rnc.numero_rnc, nota_fiscal: rnc.nota_fiscal,
+    data_emissao: rnc.data_emissao, responsavel: rnc.responsavel,
+    resp_correcao: rnc.resp_correcao, descricao: rnc.descricao,
+    contrato: rnc.contrato||'1815',
+    destino: rnc.destino||'São João do Piauí - PI',
+    cliente: rnc.cliente||'EDP - TRANSMISSÃO NORDESTE S.A.',
+    itens: (rnc.rnc_itens||[]).map(it=>({
+      romaneio:it.romaneio, ud:it.ud, sigla:it.sigla,
+      posicao:it.posicao, qtd_nc:it.qtd_nc,
+      torre:it.torre, tipo_nc:it.tipo_nc, obs:it.obs
+    }))
+  };
+  gerarPDFRNC(nc);
+  addAlert('success',`2ª via RNC ${rnc.numero_rnc}`,'PDF gerado a partir do banco.');
 }
 
 async function deletarRNC(id) {
