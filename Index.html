@@ -86,8 +86,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); min-
 .btn-logout:hover { color: var(--red); }
 
 /* ── Main content ────────────────────────────── */
-#main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
-.page { display: none; flex: 1; padding: 2rem; }
+#main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; overflow: hidden; }
+.page { display: none; flex: 1; padding: 2rem; min-width: 0; overflow-x: hidden; }
 .page.active { display: block; }
 .page-header { margin-bottom: 2rem; }
 .page-title { font-size: 1.6rem; font-weight: 800; letter-spacing: -.03em; }
@@ -131,7 +131,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); min-
 .btn-full { width: 100%; justify-content: center; padding: .7rem; }
 
 /* ── Cards & surfaces ────────────────────────── */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; min-width: 0; overflow: hidden; }
 .card-title { font-size: .75rem; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; font-family: var(--mono); margin-bottom: 1rem; }
 
 /* ── Stats row ───────────────────────────────── */
@@ -151,17 +151,20 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); min-
 .stat-card.c-blue .stat-val { color: var(--accent2); }
 
 /* ── Tables ──────────────────────────────────── */
-.tbl-wrap { overflow-x: auto; }
+.tbl-wrap { overflow-x: auto; overflow-y: auto; display: block; width: 100%; }
 .tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
-.tbl th { text-align: left; padding: .5rem .75rem; color: var(--text3); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; white-space: nowrap; }
-.tbl th.hl { color: var(--accent2); }
-.tbl td { padding: .42rem .55rem; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; font-family: var(--mono); font-size: .73rem; }
-.tbl { table-layout: fixed; }
-.tbl th { min-width: 55px; }
-.tbl th.col-rom { min-width: 80px; width: 80px; }
-.tbl th.col-sm { min-width: 45px; width: 55px; }
-.tbl th.col-md { min-width: 65px; width: 75px; }
-.tbl th.col-pct { min-width: 90px; width: 110px; }
+.tbl { table-layout: auto; border-collapse: separate; border-spacing: 0; }
+.tbl th { text-align: left; padding: .45rem .6rem; color: var(--text3); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: .65rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; white-space: nowrap; background: var(--surface2); }
+.tbl th.hl { color: var(--accent2); background: #1a1f30; }
+.tbl td { padding: .4rem .6rem; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; font-family: var(--mono); font-size: .73rem; }
+.tbl th.col-rom { min-width: 82px; }
+.tbl th.col-sm { min-width: 48px; }
+.tbl th.col-md { min-width: 68px; }
+.tbl th.col-pct { min-width: 95px; }
+/* Sticky left columns */
+.tbl th.sticky, .tbl td.sticky { position: sticky; z-index: 1; background: var(--surface); }
+.tbl th.sticky { background: var(--surface2); z-index: 2; }
+.tbl tr:hover td.sticky { background: var(--surface2); }
 .tbl tr:hover td { background: rgba(255,255,255,.02); }
 tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px solid var(--border2); color: var(--text); }
 .tbl td.c-green { color: var(--green); font-weight: 600; }
@@ -424,8 +427,8 @@ tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px sol
             <span style="font-size:.72rem;color:var(--text2);font-family:var(--mono)" id="recCount"></span>
           </div>
         </div>
-        <div class="tbl-wrap">
-          <table class="tbl" id="recTable">
+        <div class="tbl-wrap" style="max-height:calc(100vh - 340px);min-width:0">
+          <table class="tbl" id="recTable" style="min-width:max-content">
             <thead id="recThead"></thead>
             <tbody id="recTbody"></tbody>
             <tfoot id="recTfoot"></tfoot>
@@ -1067,12 +1070,12 @@ function renderRecTab(tab, filter) {
   if(tab==='posicoes') {
     const dados = applyFilter(window._linhas, filter);
     const romCols = romaneioOrder.map(r=>`<th class="hl col-rom">${r}</th>`).join('');
-    thead.innerHTML = `<tr><th class="col-sm">Vol.</th><th class="col-sm">Parte</th><th class="col-md">Pos.</th><th class="col-sm">Qt.</th><th class="col-sm">Nec.</th><th class="hl col-md">Conj.Pr.</th><th class="hl col-md">Kg Prev.</th><th class="hl col-md">Kg Rec.</th><th class="hl col-md">Tot.Rec.</th><th class="hl col-md">Conj.Form.</th><th class="hl col-pct">%</th>${romCols}</tr>`;
+    thead.innerHTML = `<tr><th class="col-sm sticky" style="left:0">Vol.</th><th class="col-sm sticky" style="left:48px">Parte</th><th class="col-md sticky" style="left:96px">Pos.</th><th class="col-sm">Qt.</th><th class="col-sm">Nec.</th><th class="hl col-md">Conj.Pr.</th><th class="hl col-md">Kg Prev.</th><th class="hl col-md">Kg Rec.</th><th class="hl col-md">Tot.Rec.</th><th class="hl col-md">Conj.Form.</th><th class="hl col-pct">%</th>${romCols}</tr>`;
     const rTotals = romaneioOrder.map((_,ri)=>`<td>${fmt(dados.reduce((s,l)=>s+(Number(l.romValues[ri])||0),0))}</td>`).join('');
-    tfoot.innerHTML = `<tr><td colspan="4" style="color:var(--text2)">SOMA</td><td>${fmt(dados.reduce((s,l)=>s+l.qtdNec,0))}</td><td>${dados.reduce((s,l)=>s+l.conjPrev,0).toFixed(1)}</td><td>${fmt(dados.reduce((s,l)=>s+l.kgPrev,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.kgRecv,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.recv,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.conjForm,0))}</td><td></td>${rTotals}</tr>`;
+    tfoot.innerHTML = `<tr><td colspan="3" class="sticky" style="left:0;color:var(--text2)">SOMA</td><td colspan="2"></td><td>${fmt(dados.reduce((s,l)=>s+l.qtdNec,0))}</td><td>${dados.reduce((s,l)=>s+l.conjPrev,0).toFixed(1)}</td><td>${fmt(dados.reduce((s,l)=>s+l.kgPrev,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.kgRecv,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.recv,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.conjForm,0))}</td><td></td>${rTotals}</tr>`;
     tbody.innerHTML = dados.slice(0,500).map(l=>{
       const romCells=l.romValues.map(v=>v===''?`<td class="muted">—</td>`:`<td>${fmt(v)}</td>`).join('');
-      return `<tr><td class="muted">${l.vol}</td><td>${l.parte}</td><td>${l.pos}</td><td>${l.quant}</td><td>${l.qtdNec}</td><td class="c-blue">${l.conjPrev.toFixed(2)}</td><td class="c-blue">${fmt(l.kgPrev)}</td><td class="c-blue">${fmt(l.kgRecv)}</td><td class="c-blue">${fmt(l.recv)}</td><td class="${sc(l.conjForm,l.conjPrev)}">${l.conjForm}</td><td>${pBar(l.pct)}</td>${romCells}</tr>`;
+      return `<tr><td class="muted sticky" style="left:0">${l.vol}</td><td class="sticky" style="left:48px">${l.parte}</td><td class="sticky" style="left:96px;font-weight:600">${l.pos}</td><td>${l.quant}</td><td>${l.qtdNec}</td><td class="c-blue">${l.conjPrev.toFixed(2)}</td><td class="c-blue">${fmt(l.kgPrev)}</td><td class="c-blue">${fmt(l.kgRecv)}</td><td class="c-blue">${fmt(l.recv)}</td><td class="${sc(l.conjForm,l.conjPrev)}">${l.conjForm}</td><td>${pBar(l.pct)}</td>${romCells}</tr>`;
     }).join('');
     $('recCount').textContent = `${dados.length} posições`;
   } else if(tab==='volumes') {
