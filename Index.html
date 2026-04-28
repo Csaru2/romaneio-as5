@@ -533,6 +533,7 @@ tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px sol
           <div style="display:flex;gap:.5rem;align-items:center">
             <input type="month" id="acmpMes" style="background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:.35rem .7rem;color:var(--text);font-family:var(--mono);font-size:.75rem;outline:none">
             <button class="btn btn-ghost" style="font-size:.78rem" onclick="carregarRNCs()">↻ Atualizar</button>
+            <button class="btn btn-green" style="font-size:.78rem" onclick="exportarRNCs()">↓ Excel</button>
           </div>
         </div>
         <div id="acmpLista">
@@ -1289,6 +1290,7 @@ async function carregarRNCs() {
   const fech=data.filter(r=>r.status==='FECHADA').length;
   const slas=data.filter(r=>r.data_fechamento).map(r=>Math.round((new Date(r.data_fechamento)-new Date(r.data_emissao))/(86400000)));
   const slaMedia=slas.length?Math.round(slas.reduce((a,b)=>a+b,0)/slas.length):0;
+  window._rncDados=data;
   $('aAberta').textContent=abertas; $('aGer').textContent=ger; $('aFech').textContent=fech; $('aSLA').textContent=slaMedia||'—';
   if(!data.length){$('acmpLista').innerHTML='<div class="empty-state">Nenhuma RNC no período</div>';return;}
   const hoje=new Date();
@@ -1313,6 +1315,57 @@ async function carregarRNCs() {
     const btn2via=`<button class="btn-tiny" onclick="segundaVia(${rnc.id})" title="2ª via PDF">PDF</button>`;
     return `<tr><td style="font-weight:600">${rnc.numero_rnc}</td><td>${rnc.romaneio_numero||'—'}</td><td>${rnc.nota_fiscal||'—'}</td><td>${df}</td><td>${pos}</td><td class="muted">${tipo}</td><td style="font-weight:600;color:var(--accent2)">${qtdNc}</td><td>${badge}</td><td>${rnc.numero_sac||'—'}</td><td>${dAt}</td><td>${rnc.nf_fechamento||'—'}</td><td>${dFe}</td><td>${rnc.qtd_recebida_rnc||'—'}</td><td class="${daysCls}">${days}d</td><td class="muted">${ult?.feito_por_nome||'—'}</td><td style="display:flex;gap:.3rem">${btn2via}${btnAv}${btnDel}</td></tr>`;
   }).join('')}</tbody></table></div>`;
+}
+
+function exportarRNCs() {
+  if(!window._rncDados || !window._rncDados.length) {
+    addAlert('warning', 'Sem dados', 'Carregue o acompanhamento antes de exportar.');
+    return;
+  }
+  const hoje = new Date();
+  const header = [
+    'Nº RNC','Romaneio','Nota Fiscal','Data Emissão',
+    'Posição','Sigla','Torre','Tipo NC','QTD NC','Status',
+    'Nº SAC','Dt. Atendimento','NF Fechamento','Dt. Fechamento','Qtd Recebida',
+    'Dias','Alterado por'
+  ];
+  const rows = window._rncDados.map(rnc => {
+    const itens = rnc.rnc_itens || [];
+    const pos   = itens.map(i => i.posicao).filter(Boolean).join(', ') || '';
+    const sigla = itens.map(i => i.sigla).filter(Boolean).join(', ') || '';
+    const torre = itens.map(i => i.torre).filter(Boolean).join(', ') || '';
+    const tipo  = itens[0]?.tipo_nc || '';
+    const qtdNc = itens.reduce((s,i) => s+(i.qtd_nc||0), 0) || '';
+    const ult   = (rnc.rnc_atualizacoes||[]).sort((a,b)=>new Date(b.feito_em)-new Date(a.feito_em))[0];
+    const dias  = Math.round((hoje - new Date(rnc.data_emissao)) / 86400000);
+    return [
+      rnc.numero_rnc || '',
+      rnc.romaneio_numero || '',
+      rnc.nota_fiscal || '',
+      rnc.data_emissao ? new Date(rnc.data_emissao).toLocaleDateString('pt-BR') : '',
+      pos, sigla, torre, tipo, qtdNc, rnc.status || '',
+      rnc.numero_sac || '',
+      rnc.data_atendimento ? new Date(rnc.data_atendimento).toLocaleDateString('pt-BR') : '',
+      rnc.nf_fechamento || '',
+      rnc.data_fechamento ? new Date(rnc.data_fechamento).toLocaleDateString('pt-BR') : '',
+      rnc.qtd_recebida_rnc || '',
+      dias,
+      ult?.feito_por_nome || ''
+    ];
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  // Column widths
+  ws['!cols'] = [
+    {wch:8},{wch:11},{wch:11},{wch:12},
+    {wch:14},{wch:8},{wch:10},{wch:35},{wch:8},{wch:12},
+    {wch:10},{wch:14},{wch:12},{wch:14},{wch:12},
+    {wch:6},{wch:16}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'RNCs');
+  const dt = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `RNCs_${dt}.xlsx`);
+  addAlert('success', 'Excel exportado!', `${rows.length} RNC(s) exportadas.`);
 }
 
 function setAcmpFilter(f) {
