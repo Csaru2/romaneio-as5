@@ -925,7 +925,7 @@ async function extractPDF(buf) {
     tokens.sort((a,b)=>b.y!==a.y?b.y-a.y:a.x-b.x);
     const txt = tokens.map(i=>i.t).join(' ').replace(/\s+/g,' ');
     pageTexts.push(txt);
-    const RE = /POS\s+(\S+)\s+AS5\s+(?:\d{10}\s+)?(\d{1,3})\s+(80\d{6})\s+(\d{10})\s+(?:(?!TORRE)\S+\s+){4,7}(TORRE\s+(?:BASICA\s+-\s+AS5|PERNA\s+[\d,]+M\s+-\s+AS5|STUB\s+-\s+AS5|EXT\s+[\d,]+M\s+-\s+AS5))\s+(\d+)\s+([\d.]*,\d{1,3})\s+([\d.,]+)/g;
+    const RE = /(?:POS|CJ\s+SOLD)\s+(\S+)\s+AS5\s+(?:\d{10}\s+)?(?:TORRE\s+)?(\d{1,3})\s+(80\d{6})\s+(\d{10})\s+(?:(?!TORRE)\S+\s+){3,10}(TORRE\s+(?:BASICA\s+-\s+AS5|PERNA\s+[\d,]+M\s+-\s+AS5|STUB\s+-\s+AS5|EXT\s+[\d,]+M\s+-\s+AS5))\s+(\d+)\s+([\d.]*,\d{1,3})\s+([\d.,]+)/g;
     let m;
     while((m=RE.exec(txt))!==null) {
       const key=`${m[3]}-${m[2]}`; if(seen.has(key)) continue; seen.add(key);
