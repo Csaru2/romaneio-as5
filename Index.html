@@ -1189,7 +1189,24 @@ function rncColetarItens() {
 }
 
 function rncColetarDados() {
-  return {numero_rnc:document.getElementById('rncNum')?.value?.trim()||'',nota_fiscal:document.getElementById('rncNF')?.value?.trim()||'',data_emissao:document.getElementById('rncData')?.value||new Date().toISOString().slice(0,10),responsavel:document.getElementById('rncResp')?.value?.trim()||'',resp_correcao:document.getElementById('rncRespCorr')?.value?.trim()||'',descricao:document.getElementById('rncDesc')?.value?.trim()||'',contrato:'1815',destino:'São João do Piauí - PI',cliente:'EDP - TRANSMISSÃO NORDESTE S.A.',criado_por:currentUser.id,atualizado_por:currentUser.id,itens:rncColetarItens()};
+  const _itens = rncColetarItens();
+  const _rncNum = document.getElementById('rncNum')?.value?.trim()||'';
+  const _romNum = _itens[0]?.romaneio || null;
+  return {
+    numero_rnc: _rncNum,
+    nota_fiscal: document.getElementById('rncNF')?.value?.trim()||null,
+    data_emissao: document.getElementById('rncData')?.value||new Date().toISOString().slice(0,10),
+    responsavel: document.getElementById('rncResp')?.value?.trim()||null,
+    resp_correcao: document.getElementById('rncRespCorr')?.value?.trim()||null,
+    descricao: document.getElementById('rncDesc')?.value?.trim()||null,
+    contrato: '1815',
+    destino: 'São João do Piauí - PI',
+    cliente: 'EDP - TRANSMISSÃO NORDESTE S.A.',
+    romaneio_numero: _romNum,
+    criado_por: currentUser.id,
+    atualizado_por: currentUser.id,
+    itens: _itens
+  };
 }
 
 $('rncSalvarBtn').addEventListener('click', async () => {
