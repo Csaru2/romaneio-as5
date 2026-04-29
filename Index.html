@@ -1294,178 +1294,150 @@ async function carregarRNCs() {
   $('aAberta').textContent=abertas; $('aGer').textContent=ger; $('aFech').textContent=fech; $('aSLA').textContent=slaMedia||'—';
   if(!data.length){$('acmpLista').innerHTML='<div class="empty-state">Nenhuma RNC no período</div>';return;}
   const hoje=new Date();
-  const linhasRNC = [];
-  data.forEach(rnc => {
-    const itens = rnc.rnc_itens || [];
-    if(!itens.length) {
-      linhasRNC.push({rnc, item:null, firstOfRnc:true, totalItens:1});
-    } else {
-      itens.forEach((item, idx) => linhasRNC.push({rnc, item, firstOfRnc:idx===0, totalItens:itens.length}));
-    }
+  // Expande: 1 linha por item da RNC
+  var rows=[];
+  data.forEach(function(rnc){
+    var itens=rnc.rnc_itens||[];
+    if(!itens.length){ rows.push({rnc:rnc,item:null,first:true,total:1}); }
+    else { itens.forEach(function(it,i){ rows.push({rnc:rnc,item:it,first:i===0,total:itens.length}); }); }
   });
+  var thead='<div class="tbl-wrap"><table class="tbl"><thead><tr>'+
+    '<th>Nº RNC</th><th>Romaneio</th><th>NF</th><th>Emissão</th>'+
+    '<th>Posição</th><th>Sigla</th><th>Torre</th><th>Tipo NC</th><th>QTD NC</th>'+
+    '<th>St.Item</th><th>St.RNC</th>'+
+    '<th>Nº SAC</th><th>Dt.Atend.</th>'+
+    '<th>NF Fech.</th><th>Dt.Fech.</th><th>Qtd Rec.</th>'+
+    '<th>Dias</th><th>Alterado por</th><th></th>'+
+    '</tr></thead><tbody>';
+  var tbody=rows.map(function(row){
+    var rnc=row.rnc, it=row.item, first=row.first, rs=row.total;
+    var df=rnc.data_emissao?new Date(rnc.data_emissao).toLocaleDateString('pt-BR'):'—';
+    var dAt=rnc.data_atendimento?new Date(rnc.data_atendimento).toLocaleDateString('pt-BR'):'—';
+    var days=Math.round((hoje-new Date(rnc.data_emissao))/86400000);
+    var dc=rnc.status==='FECHADA'?'c-green':days>30?'c-red':days>15?'c-amber':'';
+    var ult=(rnc.rnc_atualizacoes||[]).sort(function(a,b){return new Date(b.feito_em)-new Date(a.feito_em);})[0];
+    var bRnc='<span class="badge badge-'+rnc.status.toLowerCase()+'">'+rnc.status+'</span>';
+    var admin=currentProfile&&currentProfile.role==='admin';
+    var pos=it&&it.posicao?it.posicao:'—';
+    var sig=it&&it.sigla?it.sigla:'—';
+    var tor=it&&it.torre?it.torre:'—';
+    var tip=it&&it.tipo_nc?it.tipo_nc:'—';
+    var qnc=it&&it.qtd_nc?it.qtd_nc:'—';
+    var ist=it&&it.status?it.status:'ABERTA';
+    var bIt='<span class="badge badge-'+ist.toLowerCase()+'">'+ist+'</span>';
+    var dFe=it&&it.data_fechamento?new Date(it.data_fechamento).toLocaleDateString('pt-BR'):'—';
+    var nfF=it&&it.nf_fechamento?it.nf_fechamento:'—';
+    var qrec=it&&it.qtd_recebida?it.qtd_recebida:'—';
+    var tr=first&&rs>1?'<tr style="border-top:2px solid var(--border2)">':'<tr>';
+    if(first){
+      tr+='<td rowspan="'+rs+'" style="font-weight:700;vertical-align:top;border-right:1px solid var(--border2)">'+rnc.numero_rnc+'</td>';'</td>';
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top">'+(rnc.romaneio_numero||'—')+'</td>';
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top">'+(rnc.nota_fiscal||'—')+'</td>';
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top">'+df+'</td>';
+    }
+    tr+='<td>'+pos+'</td><td class="muted">'+sig+'</td><td class="muted">'+tor+'</td>';
+    tr+='<td class="muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="'+tip.replace(/"/g,"'")+'">'+tip+'</td>';
+    tr+='<td style="font-weight:600;color:var(--accent2)">'+qnc+'</td>';
+    tr+='<td>'+bIt+'</td>';
+    if(first){
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top">'+bRnc+'</td>';
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top">'+(rnc.numero_sac||'—')+'</td>';
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top">'+dAt+'</td>';
+    }
+    tr+='<td>'+nfF+'</td><td>'+dFe+'</td><td>'+qrec+'</td>';
+    if(first){
+      tr+='<td rowspan="'+rs+'" class="'+dc+'" style="vertical-align:top">'+days+'d</td>';
+      tr+='<td rowspan="'+rs+'" class="muted" style="vertical-align:top">'+(ult&&ult.feito_por_nome?ult.feito_por_nome:'—')+'</td>';
+    }
+    var bClose=it&&ist!=='FECHADA'?'<button class="btn-tiny" onclick="fecharItem('+rnc.id+','+it.id+')">Fechar</button>':'';
+    tr+='<td>'+bClose+'</td>';
+    if(first){
+      var b2via='<button class="btn-tiny" onclick="segundaVia('+rnc.id+')" title="2ª via">PDF</button>';
+      var bSac=rnc.status==='ABERTA'?'<button class="btn-tiny" onclick="abrirModalSAC('+rnc.id+')">SAC</button>':'';
+      var bDel=admin?'<button class="btn-tiny danger" onclick="deletarRNC('+rnc.id+')">✕</button>':'';
+      tr+='<td rowspan="'+rs+'" style="vertical-align:top"><div style="display:flex;flex-direction:column;gap:.25rem">'+b2via+bSac+bDel+'</div></td>';+bDel+'</div></td>';
+    }
+    tr+='</tr>';
+    return tr;
+  }).join('');
+  $('acmpLista').innerHTML = thead + tbody + '</tbody></table></div>';
+}
 
-  $('acmpLista').innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead><tr>
-    <th>Nº RNC</th><th>Romaneio</th><th>NF</th><th>Emissão</th>
-    <th>Posição</th><th>Sigla</th><th>Torre</th><th>Tipo</th><th>QTD NC</th>
-    <th>St.Item</th><th>St.RNC</th>
-    <th>Nº SAC</th><th>Dt.Atend.</th>
-    <th>NF Fech.</th><th>Dt.Fech.</th><th>Qtd Rec.</th>
-    <th>Dias</th><th>Alterado por</th><th></th>
-  </tr></thead><tbody>${linhasRNC.map(({rnc,item,firstOfRnc,totalItens})=>{
-    const df   = rnc.data_emissao ? new Date(rnc.data_emissao).toLocaleDateString('pt-BR') : '—';
-    const dAt  = rnc.data_atendimento ? new Date(rnc.data_atendimento).toLocaleDateString('pt-BR') : '—';
-    const days = Math.round((hoje-new Date(rnc.data_emissao))/86400000);
-    const daysCls = rnc.status==='FECHADA'?'c-green':days>30?'c-red':days>15?'c-amber':'';
-    const ult  = rnc.rnc_atualizacoes?.sort((a,b)=>new Date(b.feito_em)-new Date(a.feito_em))[0];
-    const badgeRnc  = \`<span class="badge badge-\${rnc.status.toLowerCase()}">\${rnc.status}</span>\`;
-    const podeEditar = currentProfile?.role==='admin';
-    const pos   = item?.posicao || '—';
-    const sigla = item?.sigla   || '—';
-    const torre = item?.torre   || '—';
-    const tipo  = item?.tipo_nc || '—';
-    const qtdNc = item?.qtd_nc  || '—';
-    const itemSt = item?.status || 'ABERTA';
-    const badgeItem = \`<span class="badge badge-\${itemSt.toLowerCase()}">\${itemSt}</span>\`;
-    const dFe  = item?.data_fechamento ? new Date(item.data_fechamento).toLocaleDateString('pt-BR') : '—';
-    const nfFe = item?.nf_fechamento || '—';
-    const qtdR = item?.qtd_recebida  || '—';
-    const btn2via = firstOfRnc ? \`<button class="btn-tiny" onclick="segundaVia(\${rnc.id})" title="2ª via PDF">PDF</button>\` : '';
-    const btnDel  = (firstOfRnc&&podeEditar) ? \`<button class="btn-tiny danger" onclick="deletarRNC(\${rnc.id})">✕</button>\` : '';
-    const btnSac  = (firstOfRnc&&rnc.status==='ABERTA') ? \`<button class="btn-tiny" onclick="abrirModalSAC(\${rnc.id})">SAC</button>\` : '';
-    const btnItem = (item&&itemSt!=='FECHADA') ? \`<button class="btn-tiny" onclick="fecharItem(\${rnc.id},\${item.id},'\${rnc.status}')">Fechar</button>\` : '';
-    const rs = totalItens||1;
-    const rncNum   = firstOfRnc ? \`<td rowspan="\${rs}" style="font-weight:700;vertical-align:top;border-right:1px solid var(--border)">\${rnc.numero_rnc}</td>\` : '';
-    const rncRom   = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${rnc.romaneio_numero||'—'}</td>\` : '';
-    const rncNF    = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${rnc.nota_fiscal||'—'}</td>\` : '';
-    const rncDf    = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${df}</td>\` : '';
-    const rncSac   = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${rnc.numero_sac||'—'}</td>\` : '';
-    const rncAt    = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${dAt}</td>\` : '';
-    const rncDias  = firstOfRnc ? \`<td rowspan="\${rs}" class="\${daysCls}" style="vertical-align:top">\${days}d</td>\` : '';
-    const rncAlt   = firstOfRnc ? \`<td rowspan="\${rs}" class="muted" style="vertical-align:top">\${ult?.feito_por_nome||'—'}</td>\` : '';
-    const rncBadge = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${badgeRnc}</td>\` : '';
-    const rncActs  = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top"><div style="display:flex;flex-direction:column;gap:.25rem">\${btn2via}\${btnSac}\${btnDel}</div></td>\` : '';
-    return \`<tr style="\${firstOfRnc&&totalItens>1?'border-top:2px solid var(--border2)':''}">
-      \${rncNum}\${rncRom}\${rncNF}\${rncDf}
-      <td>\${pos}</td><td class="muted">\${sigla}</td><td class="muted">\${torre}</td>
-      <td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">\${tipo}</td>
-      <td style="font-weight:600;color:var(--accent2)">\${qtdNc}</td>
-      <td>\${badgeItem}</td>\${rncBadge}\${rncSac}\${rncAt}
-      <td>\${nfFe}</td><td>\${dFe}</td><td>\${qtdR}</td>
-      \${rncDias}\${rncAlt}
-      <td>\${btnItem}</td>
-      \${rncActs}
-    </tr>\`;
-  }).join('')}</tbody></table></div>`
+async function segundaVia(id) {
+  var r=await sb.from('rncs').select('*, rnc_itens(*)').eq('id',id).single();
+  if(!r.data){addAlert('error','RNC não encontrada','');return;}
+  var rnc=r.data;
+  var nc={numero_rnc:rnc.numero_rnc,nota_fiscal:rnc.nota_fiscal,data_emissao:rnc.data_emissao,
+    responsavel:rnc.responsavel,resp_correcao:rnc.resp_correcao,descricao:rnc.descricao,
+    contrato:rnc.contrato||'1815',destino:rnc.destino||'São João do Piauí - PI',
+    cliente:rnc.cliente||'EDP - TRANSMISSÃO NORDESTE S.A.',
+    itens:(rnc.rnc_itens||[]).map(function(i){return{romaneio:i.romaneio,ud:i.ud,sigla:i.sigla,posicao:i.posicao,qtd_nc:i.qtd_nc,torre:i.torre,tipo_nc:i.tipo_nc,obs:i.obs};})};
+  gerarPDFRNC(nc);
+  addAlert('success','2ª via RNC '+rnc.numero_rnc,'PDF gerado do banco.');
+}
+
+function abrirModalSAC(rncId) {
+  modalStatusRNC={id:rncId,statusAtual:'ABERTA'};
+  $('modalStatusTitle').textContent='Avançar para GERENCIADA';
+  $('modalStatusBody').innerHTML='<div class="form-field"><label>Nº SAC (ex: 250/26)</label><input type="text" id="mSac" placeholder="250/26"></div><div class="form-field"><label>Data de Atendimento</label><input type="date" id="mDtAt"></div>';
+  $('modalStatus').style.display='flex';
+  $('modalStatusSalvar').onclick=function(){salvarStatus('GERENCIADA');};
+}
+
+async function fecharItem(rncId, itemId, rncStatus) {
+  $('modalStatusTitle').textContent='Fechar item';
+  $('modalStatusBody').innerHTML='<div class="form-field"><label>NF de Fechamento</label><input type="text" id="mNFFech" placeholder="ex: 236000"></div><div class="form-field"><label>Data de Fechamento</label><input type="date" id="mDtFech"></div><div class="form-field"><label>Qtd Recebida</label><input type="number" id="mQtdRec" placeholder="0" min="0"></div>';
+  $('modalStatus').style.display='flex';
+  $('modalStatusSalvar').onclick=async function(){
+    var btn=$('modalStatusSalvar');
+    btn.disabled=true; btn.textContent='Salvando...';
+    try {
+      var nf=document.getElementById('mNFFech')?.value?.trim()||null;
+      var dt=document.getElementById('mDtFech')?.value||null;
+      var qtd=parseFloat(document.getElementById('mQtdRec')?.value||'0')||null;
+      var r1=await sb.from('rnc_itens').update({status:'FECHADA',nf_fechamento:nf,data_fechamento:dt,qtd_recebida:qtd,fechado_por:currentUser.id,fechado_em:new Date().toISOString()}).eq('id',itemId);
+      if(r1.error) throw new Error(r1.error.message);
+      var r2=await sb.from('rnc_itens').select('status').eq('rnc_id',rncId);
+      var todosF=r2.data&&r2.data.every(function(i){return i.status==='FECHADA';});
+      if(todosF){
+        await sb.from('rncs').update({status:'FECHADA',nf_fechamento:nf,data_fechamento:dt,qtd_recebida_rnc:qtd,atualizado_por:currentUser.id}).eq('id',rncId);
+        await sb.from('rnc_atualizacoes').insert({rnc_id:rncId,status_de:'GERENCIADA',status_para:'FECHADA',campos:{auto:'todos os itens fechados'},feito_por:currentUser.id,feito_por_nome:currentProfile?.nome||currentUser.email});
+        addAlert('success','RNC fechada!','Todos os itens foram recebidos.');
+      } else {
+        addAlert('success','Item fechado!','Outros itens pendentes — RNC permanece GERENCIADA.');
+      }
+      fecharModalStatus(); carregarRNCs();
+    } catch(err){
+      addAlert('error','Erro ao fechar item',err.message||String(err));
+    } finally { btn.disabled=false; btn.textContent='Salvar'; }
+  };
 }
 
 function exportarRNCs() {
-  if(!window._rncDados || !window._rncDados.length) {
-    addAlert('warning', 'Sem dados', 'Carregue o acompanhamento antes de exportar.');
-    return;
-  }
-  const hoje = new Date();
-  const header = [
-    'Nº RNC','Romaneio','Nota Fiscal','Data Emissão',
-    'Posição','Sigla','Torre','Tipo NC','QTD NC','Status',
-    'Nº SAC','Dt. Atendimento','NF Fechamento','Dt. Fechamento','Qtd Recebida',
-    'Dias','Alterado por'
-  ];
-  const rows = window._rncDados.map(rnc => {
-    const itens = rnc.rnc_itens || [];
-    const pos   = itens.map(i => i.posicao).filter(Boolean).join(', ') || '';
-    const sigla = itens.map(i => i.sigla).filter(Boolean).join(', ') || '';
-    const torre = itens.map(i => i.torre).filter(Boolean).join(', ') || '';
-    const tipo  = itens[0]?.tipo_nc || '';
-    const qtdNc = itens.reduce((s,i) => s+(i.qtd_nc||0), 0) || '';
-    const ult   = (rnc.rnc_atualizacoes||[]).sort((a,b)=>new Date(b.feito_em)-new Date(a.feito_em))[0];
-    const dias  = Math.round((hoje - new Date(rnc.data_emissao)) / 86400000);
-    return [
-      rnc.numero_rnc || '',
-      rnc.romaneio_numero || '',
-      rnc.nota_fiscal || '',
-      rnc.data_emissao ? new Date(rnc.data_emissao).toLocaleDateString('pt-BR') : '',
-      pos, sigla, torre, tipo, qtdNc, rnc.status || '',
-      rnc.numero_sac || '',
-      rnc.data_atendimento ? new Date(rnc.data_atendimento).toLocaleDateString('pt-BR') : '',
-      rnc.nf_fechamento || '',
-      rnc.data_fechamento ? new Date(rnc.data_fechamento).toLocaleDateString('pt-BR') : '',
-      rnc.qtd_recebida_rnc || '',
-      dias,
-      ult?.feito_por_nome || ''
-    ];
-  });
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  // Column widths
-  ws['!cols'] = [
-    {wch:8},{wch:11},{wch:11},{wch:12},
-    {wch:14},{wch:8},{wch:10},{wch:35},{wch:8},{wch:12},
-    {wch:10},{wch:14},{wch:12},{wch:14},{wch:12},
-    {wch:6},{wch:16}
-  ];
-  XLSX.utils.book_append_sheet(wb, ws, 'RNCs');
-  const dt = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `RNCs_${dt}.xlsx`);
-  addAlert('success', 'Excel exportado!', `${rows.length} RNC(s) exportadas.`);
-}
-
-// ── Modal SAC (avança RNC para GERENCIADA) ──────────────────
-function abrirModalSAC(rncId) {
-  modalStatusRNC = { id: rncId, statusAtual: 'ABERTA' };
-  $('modalStatusTitle').textContent = 'Avançar para GERENCIADA';
-  $('modalStatusBody').innerHTML = `
-    <div class="form-field"><label>Nº SAC (ex: 250/26)</label><input type="text" id="mSac" placeholder="250/26"></div>
-    <div class="form-field"><label>Data de Atendimento</label><input type="date" id="mDtAt"></div>`;
-  $('modalStatus').style.display = 'flex';
-  $('modalStatusSalvar').onclick = () => salvarStatus('GERENCIADA');
-}
-
-// ── Fechar item individual ───────────────────────────────────
-async function fecharItem(rncId, itemId, rncStatus) {
-  $('modalStatusTitle').textContent = 'Fechar item';
-  $('modalStatusBody').innerHTML = `
-    <div class="form-field"><label>NF de Fechamento</label><input type="text" id="mNFFech" placeholder="ex: 236000"></div>
-    <div class="form-field"><label>Data de Fechamento</label><input type="date" id="mDtFech"></div>
-    <div class="form-field"><label>Qtd Recebida</label><input type="number" id="mQtdRec" placeholder="0" min="0"></div>`;
-  $('modalStatus').style.display = 'flex';
-  $('modalStatusSalvar').onclick = async () => {
-    const btn = $('modalStatusSalvar');
-    btn.disabled = true; btn.textContent = 'Salvando...';
-    try {
-      const nf  = document.getElementById('mNFFech')?.value?.trim()||null;
-      const dt  = document.getElementById('mDtFech')?.value||null;
-      const qtd = parseFloat(document.getElementById('mQtdRec')?.value||'0')||null;
-      // Update item
-      const {error:eIt} = await sb.from('rnc_itens').update({
-        status:'FECHADA', nf_fechamento:nf, data_fechamento:dt,
-        qtd_recebida:qtd, fechado_por:currentUser.id, fechado_em:new Date().toISOString()
-      }).eq('id', itemId);
-      if(eIt) throw new Error(eIt.message);
-      // Check if all items closed → close RNC too
-      const {data:itens} = await sb.from('rnc_itens').select('status').eq('rnc_id', rncId);
-      const todosF = itens && itens.every(i => i.status === 'FECHADA');
-      if(todosF) {
-        await sb.from('rncs').update({
-          status:'FECHADA', nf_fechamento:nf, data_fechamento:dt,
-          qtd_recebida_rnc:qtd, atualizado_por:currentUser.id
-        }).eq('id', rncId);
-        await sb.from('rnc_atualizacoes').insert({
-          rnc_id:rncId, status_de:'GERENCIADA', status_para:'FECHADA',
-          campos:{auto:'todos os itens fechados'},
-          feito_por:currentUser.id, feito_por_nome:currentProfile?.nome||currentUser.email
-        });
-        addAlert('success','RNC fechada!','Todos os itens foram recebidos.');
-      } else {
-        addAlert('success','Item fechado!','Outros itens ainda pendentes — RNC permanece GERENCIADA.');
-      }
-      fecharModalStatus();
-      carregarRNCs();
-    } catch(err) {
-      addAlert('error','Erro ao fechar item', err.message||String(err));
-    } finally {
-      btn.disabled=false; btn.textContent='Salvar';
+  if(!window._rncDados||!window._rncDados.length){addAlert('warning','Sem dados','Carregue o acompanhamento antes de exportar.');return;}
+  var hoje=new Date();
+  var header=['Nº RNC','Romaneio','Nota Fiscal','Data Emissão','Posição','Sigla','Torre','Tipo NC','QTD NC','St.Item','St.RNC','Nº SAC','Dt. Atendimento','NF Fechamento','Dt. Fechamento','Qtd Recebida','Dias','Alterado por'];
+  var rows=[];
+  window._rncDados.forEach(function(rnc){
+    var itens=rnc.rnc_itens||[];
+    var ult=(rnc.rnc_atualizacoes||[]).sort(function(a,b){return new Date(b.feito_em)-new Date(a.feito_em);})[0];
+    var days=Math.round((hoje-new Date(rnc.data_emissao))/86400000);
+    var df=rnc.data_emissao?new Date(rnc.data_emissao).toLocaleDateString('pt-BR'):'';
+    var dAt=rnc.data_atendimento?new Date(rnc.data_atendimento).toLocaleDateString('pt-BR'):'';
+    if(!itens.length){
+      rows.push([rnc.numero_rnc||'',rnc.romaneio_numero||'',rnc.nota_fiscal||'',df,'','','','','','',(rnc.status||''),rnc.numero_sac||'',dAt,rnc.nf_fechamento||'',rnc.data_fechamento?new Date(rnc.data_fechamento).toLocaleDateString('pt-BR'):'',rnc.qtd_recebida_rnc||'',days,ult&&ult.feito_por_nome?ult.feito_por_nome:'']);
+    } else {
+      itens.forEach(function(it){
+        rows.push([rnc.numero_rnc||'',rnc.romaneio_numero||'',rnc.nota_fiscal||'',df,it.posicao||'',it.sigla||'',it.torre||'',it.tipo_nc||'',it.qtd_nc||'',(it.status||'ABERTA'),(rnc.status||''),rnc.numero_sac||'',dAt,it.nf_fechamento||'',it.data_fechamento?new Date(it.data_fechamento).toLocaleDateString('pt-BR'):'',it.qtd_recebida||'',days,ult&&ult.feito_por_nome?ult.feito_por_nome:'']);
+      });
     }
-  };
+  });
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet([header].concat(rows));
+  ws['!cols']=[{wch:8},{wch:11},{wch:11},{wch:12},{wch:12},{wch:8},{wch:10},{wch:32},{wch:8},{wch:12},{wch:12},{wch:10},{wch:14},{wch:12},{wch:14},{wch:12},{wch:6},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws,'RNCs');
+  XLSX.writeFile(wb,'RNCs_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  addAlert('success','Excel exportado!',rows.length+' linha(s) exportadas.');
 }
 
 function setAcmpFilter(f) {
@@ -1517,33 +1489,13 @@ async function salvarStatus(proximo) {
     if(error) throw new Error(error.message);
     await sb.from('rnc_atualizacoes').insert({rnc_id:modalStatusRNC.id,status_de:modalStatusRNC.statusAtual,status_para:proximo,campos,feito_por:currentUser.id,feito_por_nome:currentProfile?.nome||currentUser.email});
     fecharModalStatus();
-    addAlert('success',`Status atualizado para ${proximo}!`,'Registro salvo com auditoria.');
+    addAlert('success','Status atualizado para '+proximo+'!','Registro salvo com auditoria.');
     carregarRNCs();
   } catch(err) {
     addAlert('error','Erro ao atualizar status', err.message||String(err));
   } finally {
     btn.disabled = false; btn.textContent = 'Salvar';
   }
-}
-
-async function segundaVia(id) {
-  const {data:rnc,error} = await sb.from('rncs').select('*, rnc_itens(*)').eq('id',id).single();
-  if(error||!rnc){ addAlert('error','RNC não encontrada',error?.message||''); return; }
-  const nc = {
-    numero_rnc: rnc.numero_rnc, nota_fiscal: rnc.nota_fiscal,
-    data_emissao: rnc.data_emissao, responsavel: rnc.responsavel,
-    resp_correcao: rnc.resp_correcao, descricao: rnc.descricao,
-    contrato: rnc.contrato||'1815',
-    destino: rnc.destino||'São João do Piauí - PI',
-    cliente: rnc.cliente||'EDP - TRANSMISSÃO NORDESTE S.A.',
-    itens: (rnc.rnc_itens||[]).map(it=>({
-      romaneio:it.romaneio, ud:it.ud, sigla:it.sigla,
-      posicao:it.posicao, qtd_nc:it.qtd_nc,
-      torre:it.torre, tipo_nc:it.tipo_nc, obs:it.obs
-    }))
-  };
-  gerarPDFRNC(nc);
-  addAlert('success',`2ª via RNC ${rnc.numero_rnc}`,'PDF gerado a partir do banco.');
 }
 
 async function deletarRNC(id) {
