@@ -1294,27 +1294,68 @@ async function carregarRNCs() {
   $('aAberta').textContent=abertas; $('aGer').textContent=ger; $('aFech').textContent=fech; $('aSLA').textContent=slaMedia||'—';
   if(!data.length){$('acmpLista').innerHTML='<div class="empty-state">Nenhuma RNC no período</div>';return;}
   const hoje=new Date();
+  const linhasRNC = [];
+  data.forEach(rnc => {
+    const itens = rnc.rnc_itens || [];
+    if(!itens.length) {
+      linhasRNC.push({rnc, item:null, firstOfRnc:true, totalItens:1});
+    } else {
+      itens.forEach((item, idx) => linhasRNC.push({rnc, item, firstOfRnc:idx===0, totalItens:itens.length}));
+    }
+  });
+
   $('acmpLista').innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead><tr>
-    <th>Nº RNC</th><th>Romaneio</th><th>NF</th><th>Emissão</th><th>Posição</th><th>Tipo</th><th>QTD NC</th><th>Status</th>
-    <th>Nº SAC</th><th>Dt.Atend.</th><th>NF Fech.</th><th>Dt.Fech.</th><th>Qtd Rec.</th><th>Dias</th><th>Alterado por</th><th></th>
-  </tr></thead><tbody>${data.map(rnc=>{
-    const itens=rnc.rnc_itens||[];
-    const pos=itens.map(i=>i.posicao).filter(Boolean).join(', ')||'—';
-    const tipo=itens[0]?.tipo_nc||'—';
-    const qtdNc=itens.reduce((s,i)=>s+(i.qtd_nc||0),0)||'—';
-    const df=rnc.data_emissao?new Date(rnc.data_emissao).toLocaleDateString('pt-BR'):'—';
-    const dAt=rnc.data_atendimento?new Date(rnc.data_atendimento).toLocaleDateString('pt-BR'):'—';
-    const dFe=rnc.data_fechamento?new Date(rnc.data_fechamento).toLocaleDateString('pt-BR'):'—';
-    const days=Math.round((hoje-new Date(rnc.data_emissao))/86400000);
-    const daysCls=rnc.status==='FECHADA'?'c-green':days>30?'c-red':days>15?'c-amber':'';
-    const ult=rnc.rnc_atualizacoes?.sort((a,b)=>new Date(b.feito_em)-new Date(a.feito_em))[0];
-    const badge=`<span class="badge badge-${rnc.status.toLowerCase()}">${rnc.status}</span>`;
-    const podeEditar=currentProfile?.role==='admin';
-    const btnAv=rnc.status!=='FECHADA'?`<button class="btn-tiny" onclick="abrirModalStatus(${rnc.id},'${rnc.status}')">Avançar</button>`:'';
-    const btnDel=podeEditar?`<button class="btn-tiny danger" onclick="deletarRNC(${rnc.id})">✕</button>`:'';
-    const btn2via=`<button class="btn-tiny" onclick="segundaVia(${rnc.id})" title="2ª via PDF">PDF</button>`;
-    return `<tr><td style="font-weight:600">${rnc.numero_rnc}</td><td>${rnc.romaneio_numero||'—'}</td><td>${rnc.nota_fiscal||'—'}</td><td>${df}</td><td>${pos}</td><td class="muted">${tipo}</td><td style="font-weight:600;color:var(--accent2)">${qtdNc}</td><td>${badge}</td><td>${rnc.numero_sac||'—'}</td><td>${dAt}</td><td>${rnc.nf_fechamento||'—'}</td><td>${dFe}</td><td>${rnc.qtd_recebida_rnc||'—'}</td><td class="${daysCls}">${days}d</td><td class="muted">${ult?.feito_por_nome||'—'}</td><td style="display:flex;gap:.3rem">${btn2via}${btnAv}${btnDel}</td></tr>`;
-  }).join('')}</tbody></table></div>`;
+    <th>Nº RNC</th><th>Romaneio</th><th>NF</th><th>Emissão</th>
+    <th>Posição</th><th>Sigla</th><th>Torre</th><th>Tipo</th><th>QTD NC</th>
+    <th>St.Item</th><th>St.RNC</th>
+    <th>Nº SAC</th><th>Dt.Atend.</th>
+    <th>NF Fech.</th><th>Dt.Fech.</th><th>Qtd Rec.</th>
+    <th>Dias</th><th>Alterado por</th><th></th>
+  </tr></thead><tbody>${linhasRNC.map(({rnc,item,firstOfRnc,totalItens})=>{
+    const df   = rnc.data_emissao ? new Date(rnc.data_emissao).toLocaleDateString('pt-BR') : '—';
+    const dAt  = rnc.data_atendimento ? new Date(rnc.data_atendimento).toLocaleDateString('pt-BR') : '—';
+    const days = Math.round((hoje-new Date(rnc.data_emissao))/86400000);
+    const daysCls = rnc.status==='FECHADA'?'c-green':days>30?'c-red':days>15?'c-amber':'';
+    const ult  = rnc.rnc_atualizacoes?.sort((a,b)=>new Date(b.feito_em)-new Date(a.feito_em))[0];
+    const badgeRnc  = \`<span class="badge badge-\${rnc.status.toLowerCase()}">\${rnc.status}</span>\`;
+    const podeEditar = currentProfile?.role==='admin';
+    const pos   = item?.posicao || '—';
+    const sigla = item?.sigla   || '—';
+    const torre = item?.torre   || '—';
+    const tipo  = item?.tipo_nc || '—';
+    const qtdNc = item?.qtd_nc  || '—';
+    const itemSt = item?.status || 'ABERTA';
+    const badgeItem = \`<span class="badge badge-\${itemSt.toLowerCase()}">\${itemSt}</span>\`;
+    const dFe  = item?.data_fechamento ? new Date(item.data_fechamento).toLocaleDateString('pt-BR') : '—';
+    const nfFe = item?.nf_fechamento || '—';
+    const qtdR = item?.qtd_recebida  || '—';
+    const btn2via = firstOfRnc ? \`<button class="btn-tiny" onclick="segundaVia(\${rnc.id})" title="2ª via PDF">PDF</button>\` : '';
+    const btnDel  = (firstOfRnc&&podeEditar) ? \`<button class="btn-tiny danger" onclick="deletarRNC(\${rnc.id})">✕</button>\` : '';
+    const btnSac  = (firstOfRnc&&rnc.status==='ABERTA') ? \`<button class="btn-tiny" onclick="abrirModalSAC(\${rnc.id})">SAC</button>\` : '';
+    const btnItem = (item&&itemSt!=='FECHADA') ? \`<button class="btn-tiny" onclick="fecharItem(\${rnc.id},\${item.id},'\${rnc.status}')">Fechar</button>\` : '';
+    const rs = totalItens||1;
+    const rncNum   = firstOfRnc ? \`<td rowspan="\${rs}" style="font-weight:700;vertical-align:top;border-right:1px solid var(--border)">\${rnc.numero_rnc}</td>\` : '';
+    const rncRom   = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${rnc.romaneio_numero||'—'}</td>\` : '';
+    const rncNF    = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${rnc.nota_fiscal||'—'}</td>\` : '';
+    const rncDf    = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${df}</td>\` : '';
+    const rncSac   = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${rnc.numero_sac||'—'}</td>\` : '';
+    const rncAt    = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${dAt}</td>\` : '';
+    const rncDias  = firstOfRnc ? \`<td rowspan="\${rs}" class="\${daysCls}" style="vertical-align:top">\${days}d</td>\` : '';
+    const rncAlt   = firstOfRnc ? \`<td rowspan="\${rs}" class="muted" style="vertical-align:top">\${ult?.feito_por_nome||'—'}</td>\` : '';
+    const rncBadge = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top">\${badgeRnc}</td>\` : '';
+    const rncActs  = firstOfRnc ? \`<td rowspan="\${rs}" style="vertical-align:top"><div style="display:flex;flex-direction:column;gap:.25rem">\${btn2via}\${btnSac}\${btnDel}</div></td>\` : '';
+    return \`<tr style="\${firstOfRnc&&totalItens>1?'border-top:2px solid var(--border2)':''}">
+      \${rncNum}\${rncRom}\${rncNF}\${rncDf}
+      <td>\${pos}</td><td class="muted">\${sigla}</td><td class="muted">\${torre}</td>
+      <td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">\${tipo}</td>
+      <td style="font-weight:600;color:var(--accent2)">\${qtdNc}</td>
+      <td>\${badgeItem}</td>\${rncBadge}\${rncSac}\${rncAt}
+      <td>\${nfFe}</td><td>\${dFe}</td><td>\${qtdR}</td>
+      \${rncDias}\${rncAlt}
+      <td>\${btnItem}</td>
+      \${rncActs}
+    </tr>\`;
+  }).join('')}</tbody></table></div>`
 }
 
 function exportarRNCs() {
@@ -1366,6 +1407,65 @@ function exportarRNCs() {
   const dt = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `RNCs_${dt}.xlsx`);
   addAlert('success', 'Excel exportado!', `${rows.length} RNC(s) exportadas.`);
+}
+
+// ── Modal SAC (avança RNC para GERENCIADA) ──────────────────
+function abrirModalSAC(rncId) {
+  modalStatusRNC = { id: rncId, statusAtual: 'ABERTA' };
+  $('modalStatusTitle').textContent = 'Avançar para GERENCIADA';
+  $('modalStatusBody').innerHTML = `
+    <div class="form-field"><label>Nº SAC (ex: 250/26)</label><input type="text" id="mSac" placeholder="250/26"></div>
+    <div class="form-field"><label>Data de Atendimento</label><input type="date" id="mDtAt"></div>`;
+  $('modalStatus').style.display = 'flex';
+  $('modalStatusSalvar').onclick = () => salvarStatus('GERENCIADA');
+}
+
+// ── Fechar item individual ───────────────────────────────────
+async function fecharItem(rncId, itemId, rncStatus) {
+  $('modalStatusTitle').textContent = 'Fechar item';
+  $('modalStatusBody').innerHTML = `
+    <div class="form-field"><label>NF de Fechamento</label><input type="text" id="mNFFech" placeholder="ex: 236000"></div>
+    <div class="form-field"><label>Data de Fechamento</label><input type="date" id="mDtFech"></div>
+    <div class="form-field"><label>Qtd Recebida</label><input type="number" id="mQtdRec" placeholder="0" min="0"></div>`;
+  $('modalStatus').style.display = 'flex';
+  $('modalStatusSalvar').onclick = async () => {
+    const btn = $('modalStatusSalvar');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+      const nf  = document.getElementById('mNFFech')?.value?.trim()||null;
+      const dt  = document.getElementById('mDtFech')?.value||null;
+      const qtd = parseFloat(document.getElementById('mQtdRec')?.value||'0')||null;
+      // Update item
+      const {error:eIt} = await sb.from('rnc_itens').update({
+        status:'FECHADA', nf_fechamento:nf, data_fechamento:dt,
+        qtd_recebida:qtd, fechado_por:currentUser.id, fechado_em:new Date().toISOString()
+      }).eq('id', itemId);
+      if(eIt) throw new Error(eIt.message);
+      // Check if all items closed → close RNC too
+      const {data:itens} = await sb.from('rnc_itens').select('status').eq('rnc_id', rncId);
+      const todosF = itens && itens.every(i => i.status === 'FECHADA');
+      if(todosF) {
+        await sb.from('rncs').update({
+          status:'FECHADA', nf_fechamento:nf, data_fechamento:dt,
+          qtd_recebida_rnc:qtd, atualizado_por:currentUser.id
+        }).eq('id', rncId);
+        await sb.from('rnc_atualizacoes').insert({
+          rnc_id:rncId, status_de:'GERENCIADA', status_para:'FECHADA',
+          campos:{auto:'todos os itens fechados'},
+          feito_por:currentUser.id, feito_por_nome:currentProfile?.nome||currentUser.email
+        });
+        addAlert('success','RNC fechada!','Todos os itens foram recebidos.');
+      } else {
+        addAlert('success','Item fechado!','Outros itens ainda pendentes — RNC permanece GERENCIADA.');
+      }
+      fecharModalStatus();
+      carregarRNCs();
+    } catch(err) {
+      addAlert('error','Erro ao fechar item', err.message||String(err));
+    } finally {
+      btn.disabled=false; btn.textContent='Salvar';
+    }
+  };
 }
 
 function setAcmpFilter(f) {
