@@ -417,6 +417,7 @@ tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px sol
             <button class="tab-btn active" onclick="switchRecTab('posicoes')">Posições</button>
             <button class="tab-btn" onclick="switchRecTab('volumes')">Volumes</button>
             <button class="tab-btn" onclick="switchRecTab('partes')">Partes</button>
+            <button class="tab-btn" onclick="switchRecTab('fixadores')">Fixadores</button>
           </div>
           <div style="display:flex;gap:.4rem;align-items:center">
             <div class="filter-bar">
@@ -633,7 +634,8 @@ let currentProfile = null;
 let baseAS5 = [];           // linhas da base carregadas do Supabase
 let baseHeaders = [];
 let idxVol=-1, idxParte=-1, idxPos=-1, idxQuant=-1, idxQtdNec=-1, idxPeso=-1;
-let romaneioData = {};      // { num: [val por linha] }
+let romaneioData = {};      // { num: [val por linha] } FD
+let romaneioDataCM = {};    // { num: [val por linha] } CM
 let romaneioOrder = [];
 let romaneiosDB = {};       // { num: { id, dados: [] } } ← itens do banco
 let debugText = '';
@@ -820,9 +822,14 @@ async function carregarRomaneiosDB() {
     if(!romaneioOrder.includes(r.numero)) romaneioOrder.push(r.numero);
     // Reconstrói romaneioData
     if(baseAS5.length && r.romaneio_itens) {
-      const idx = {};
-      r.romaneio_itens.forEach(it => { const k=it.parte+'-'+it.posicao; idx[k]=(idx[k]||0)+it.qtd; });
+      const idx = {}, idxCM = {};
+      r.romaneio_itens.forEach(it => {
+        const k=it.parte+'-'+it.posicao;
+        if(it.tipo_item==='CM'){ idxCM[k]=(idxCM[k]||0)+it.qtd; }
+        else { idx[k]=(idx[k]||0)+it.qtd; }
+      });
       romaneioData[r.numero] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idx[k]!==undefined?idx[k]:''; });
+      romaneioDataCM[r.numero] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idxCM[k]!==undefined?idxCM[k]:''; });
     }
   });
   atualizarListaRomaneios();
@@ -874,20 +881,28 @@ async function processarPDFs(files) {
         item: r.Item,
         ud: r.UD,
         posicao: r.Posicao,
-        parte: transformParte(r.DescPA),
-        desc_pa: r.DescPA,
+        parte: r.TipoItem==='CM' ? r.Parte : transformParte(r.DescPA),
+        desc_pa: r.TipoItem==='CM' ? (r.DescSKU||r.DescPA) : r.DescPA,
         qtd: r.Qtd,
         peso_unit_kg: r.PesoUnit,
-        peso_total_kg: r.PesoTotal
+        peso_total_kg: r.PesoTotal,
+        tipo_item: r.TipoItem||'FD'
       }));
       const CHUNK = 200;
       for(let i=0; i<itens.length; i+=CHUNK) await sb.from('romaneio_itens').insert(itens.slice(i,i+CHUNK));
       romaneiosDB[rom] = { ...romRec, romaneio_itens: itens };
       if(!romaneioOrder.includes(rom)) romaneioOrder.push(rom);
       // Monta romaneioData
-      const idx = {};
-      rows.forEach(r => { const k=transformParte(r.DescPA)+'-'+r.Posicao; idx[k]=(idx[k]||0)+r.Qtd; });
+      const idx = {}, idxCM2 = {};
+      rows.forEach(r => {
+        if(r.TipoItem==='CM'){
+          const k=r.Parte+'-'+r.Posicao; idxCM2[k]=(idxCM2[k]||0)+r.Qtd;
+        } else {
+          const k=transformParte(r.DescPA)+'-'+r.Posicao; idx[k]=(idx[k]||0)+r.Qtd;
+        }
+      });
       romaneioData[rom] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idx[k]!==undefined?idx[k]:''; });
+      romaneioDataCM[rom] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idxCM2[k]!==undefined?idxCM2[k]:''; });
       addAlert('success', `Romaneio ${rom} processado`, `${rows.length} itens salvos no banco.`);
       atualizarListaRomaneios();
       recalcular();
@@ -918,6 +933,51 @@ function atualizarListaRomaneios() {
   }).join('');
 }
 
+// ── Mapeamento diâmetro M → mm ──────────────────────────────
+const DIAM_MAP = {'12':12.7,'16':15.9,'20':19.1};
+
+function skuToPos(skuDesc) {
+  // Parafuso SX AC MddXccMM → P-dd.d X cc
+  var m = skuDesc.match(/PARAFUSO\s+(?:SX|DEG)\s+AC\s+M(\d+)X(\d+)MM/i);
+  if(m) {
+    var diam = DIAM_MAP[m[1]] || parseFloat(m[1]);
+    var comp = parseInt(m[2]);
+    if(skuDesc.toUpperCase().includes('DEG')) return 'PD-18M';
+    return 'P-' + diam + ' X ' + comp;
+  }
+  // Porca SX AC Mdd → PR-dd.d
+  m = skuDesc.match(/PORCA\s+SX\s+AC\s+M(\d+)/i);
+  if(m) { var d=DIAM_MAP[m[1]]||parseFloat(m[1]); return 'PR-'+d; }
+  // Arruela LIS CIRC dd.d/MddXccMM → A-dd.d X cc
+  m = skuDesc.match(/ARRUELA[^\d]+(\d+[,.]\d+)\s*\/\s*M\d+X(\d+)MM/i);
+  if(m) { var d2=parseFloat(m[1].replace(',','.')); var t=parseFloat(m[2]); return 'A-'+d2+' X '+t; }
+  // Calco LIS AC dd.d/MddXcc.cMM → CA-dd.d X cc.c
+  m = skuDesc.match(/CALCO[^\d]+(\d+[,.]\d+)\s*\/\s*M\d+X([\d.]+)MM/i);
+  if(m) { var d3=parseFloat(m[1].replace(',','.')); var t2=parseFloat(m[2]); return 'CA-'+d3+' X '+t2; }
+  // Palnut AC Mdd → PN-dd.d
+  m = skuDesc.match(/PALNUT\s+AC\s+M(\d+)/i);
+  if(m) { var d4=DIAM_MAP[m[1]]||parseFloat(m[1]); return 'PN-'+d4; }
+  // Mancal BL05/BL14E
+  m = skuDesc.match(/MANCAL\s+(BL\w+)/i);
+  if(m) return m[1].toUpperCase();
+  // Manilha BM44
+  m = skuDesc.match(/MANILHA\s+(?:RT\s+)?(BM\w+)/i);
+  if(m) return m[1].toUpperCase();
+  return null;
+}
+
+function descPaToParteFixador(descPA) {
+  if(!descPA) return null;
+  var d = descPA.toUpperCase();
+  if(d.includes('BASICA')) return 'TB';
+  if(d.includes('STUB')) return 'STUB';
+  var m = d.match(/PERNA\s+([\d,]+)M/);
+  if(m) { var v=m[1]; return 'P'+(v.includes(',')?v:v+',0'); }
+  var e = d.match(/EXT\s+([\d,]+)M/);
+  if(e) { var v2=e[1]; return 'E'+(v2.includes(',')?v2:v2+',0'); }
+  return null;
+}
+
 // ── PDF Extraction ────────────────────────────────────────────
 async function extractPDF(buf) {
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -929,11 +989,37 @@ async function extractPDF(buf) {
     tokens.sort((a,b)=>b.y!==a.y?b.y-a.y:a.x-b.x);
     const txt = tokens.map(i=>i.t).join(' ').replace(/\s+/g,' ');
     pageTexts.push(txt);
-    const RE = /(?:POS|CJ\s+SOLD)\s+(\S+)\s+AS5\s+(?:\d{10}\s+)?(?:TORRE\s+)?(\d{1,3})\s+(80\d{6})\s+(\d{10})\s+(?:(?!TORRE)\S+\s+){3,10}(TORRE\s+(?:BASICA\s+-\s+AS5|PERNA\s+[\d,]+M\s+-\s+AS5|STUB\s+-\s+AS5|EXT\s+[\d,]+M\s+-\s+AS5))\s+(\d+)\s+([\d.]*,\d{1,3})\s+([\d.,]+)/g;
+
+    // ── FD: estruturas ───────────────────────────────────────
+    const RE = /(?:POS|CJ\s+SOLD)\s+(\S+)\s+AS5\s+(?:\d{10}\s+)?(?:TORRE\s+)?(\d{1,3})\s+(80\d{6})\s+(\d{10})\s+(?:(?!TORRE\s+(?:BASICA|PERNA|STUB|EXT))\S+\s+){3,10}(TORRE\s+(?:BASICA\s+-\s+AS5|PERNA\s+[\d,]+M\s+-\s+AS5|STUB\s+-\s+AS5|EXT\s+[\d,]+M\s+-\s+AS5))\s+(\d+)\s+([\d.]*,\d{1,3})\s+([\d.,]+)/g;
     let m;
     while((m=RE.exec(txt))!==null) {
-      const key=`${m[3]}-${m[2]}`; if(seen.has(key)) continue; seen.add(key);
-      rows.push({Item:parseInt(m[2]),Remessa:m[3],UD:m[4],Posicao:m[1],DescPA:m[5].replace(/\s+/g,' ').trim(),Qtd:parseInt(m[6]),PesoUnit:parseBR(m[7]),PesoTotal:parseBR(m[8])});
+      const key=m[3]+'-'+m[2]; if(seen.has(key)) continue; seen.add(key);
+      rows.push({Item:parseInt(m[2]),Remessa:m[3],UD:m[4],Posicao:m[1],
+        DescPA:m[5].replace(/\s+/g,' ').trim(),Qtd:parseInt(m[6]),
+        PesoUnit:parseBR(m[7]),PesoTotal:parseBR(m[8]),TipoItem:'FD'});
+    }
+
+    // ── CM: fixadores ────────────────────────────────────────
+    const RCM = /(\d+)\s+(80\d{6})\s+(\d{10})\s+\S+\s+\S+\s+CM\s+\d+\s+\d+\s+(TORRE\s+(?:BASICA|PERNA\s+[\d,]+M|STUB|EXT\s+[\d,]+M)\s+-\s+AS5)\s+((?:PARAFUSO|PORCA|ARRUELA|CALCO|PALNUT|MANCAL|MANILHA)\s+[^0-9]+?)\s+(\d[\d.]*)\s+(\d+[\d.,]*)\s+(\d+[\d.,]*)/g;
+    let mc;
+    while((mc=RCM.exec(txt))!==null) {
+      const remessa=mc[2], item=parseInt(mc[1]);
+      const descPA=mc[4].trim(), skuDesc=mc[5].trim();
+      const parte=descPaToParteFixador(descPA);
+      const posicao=skuToPos(skuDesc);
+      if(!parte||!posicao) continue;
+      const qtd=parseBR(mc[6].replace(/\./g,'')), pesoUnit=parseBR(mc[7]), pesoTotal=parseBR(mc[8]);
+      if(!qtd||!pesoUnit) continue;
+      const cmKey='CM-'+remessa+'-'+parte+'-'+posicao;
+      const existing=rows.find(r=>r._cmKey===cmKey);
+      if(existing){ existing.Qtd+=qtd; existing.PesoTotal=parseFloat((existing.PesoTotal+pesoTotal).toFixed(3)); }
+      else {
+        rows.push({Item:item,Remessa:remessa,UD:mc[3],Posicao:posicao,
+          DescPA:descPA,DescSKU:skuDesc,Parte:parte,
+          Qtd:qtd,PesoUnit:pesoUnit,PesoTotal:pesoTotal,
+          TipoItem:'CM',_cmKey:cmKey});
+      }
     }
   }
   return { rows: rows.sort((a,b)=>a.Item-b.Item), pageTexts };
@@ -1088,6 +1174,8 @@ function renderRecTab(tab, filter) {
       return `<tr><td>${v.parte}</td><td>${v.vol}</td><td>${v.posicoes.length}</td><td class="c-blue">${v.conjPrev.toFixed(2)}</td><td class="c-blue">${fmt(v.kgPrev)}</td><td class="c-blue">${fmt(v.kgRecv)}</td><td class="${sc(v.conjForm,v.conjPrev)}">${v.conjForm}</td><td class="${sc(v.conjForm,v.conjPrev)}">${st}</td><td>${pBar(v.pct)}</td></tr>`;
     }).join('');
     $('recCount').textContent = `${dados.length} volumes`;
+  } else if(tab==='fixadores') {
+    renderFixadoresTab(filter, thead, tbody, tfoot);
   } else {
     const dados = applyFilter(window._partes, filter);
     thead.innerHTML = `<tr><th>Parte</th><th>Volumes</th><th>Vols.Comp.</th><th class="hl">Conj.Prev.</th><th class="hl">Kg Prev.</th><th class="hl">Kg Rec.</th><th class="hl">% Kg</th><th class="hl">Conj.Form.</th><th class="hl">Status</th><th class="hl">% Parte</th></tr>`;
@@ -1098,6 +1186,64 @@ function renderRecTab(tab, filter) {
     }).join('');
     $('recCount').textContent = `${dados.length} partes`;
   }
+}
+
+// ── Aba Fixadores ────────────────────────────────────────────
+function renderFixadoresTab(filter, thead, tbody, tfoot) {
+  if(!baseAS5.length || !romaneioOrder.length) {
+    thead.innerHTML=''; tbody.innerHTML='<tr><td colspan="8" class="empty-state">Processe um romaneio com fixadores</td></tr>'; tfoot.innerHTML=''; return;
+  }
+  // Filtra só linhas CM da base AS5
+  const linhasCM = baseAS5.filter(row => {
+    const mat = (row.material||'').toLowerCase();
+    return ['parafuso','porca','arruela','calço','palnut','mancal','manilha'].some(t=>mat.includes(t));
+  });
+  if(!linhasCM.length) {
+    thead.innerHTML=''; tbody.innerHTML='<tr><td colspan="8" class="empty-state">Nenhum fixador na base AS5. Faça upload da nova planilha no Admin.</td></tr>'; tfoot.innerHTML=''; return;
+  }
+  // Calcula totais recebidos por parte-posição
+  const linhas = linhasCM.map(row => {
+    const baseIdx = baseAS5.indexOf(row);
+    const qtdNec  = parseFloat(String(row.qtd_necessaria||'0').replace(',','.')) || 0;
+    const quant   = parseFloat(String(row.quant||'1').replace(',','.')) || 1;
+    const pesoUnit= parseFloat(String(row.peso||'0').replace(',','.')) || 0;
+    let recv = 0;
+    romaneioOrder.forEach(rom => {
+      const v = romaneioDataCM[rom]?.[baseIdx];
+      if(v!==''&&v!==undefined) recv += Number(v);
+    });
+    const kgPrev  = qtdNec * pesoUnit;
+    const kgRecv  = recv * pesoUnit;
+    const conjPrev= quant>0?qtdNec/quant:0;
+    const conjForm= quant>0?Math.floor(recv/quant):0;
+    const pct     = qtdNec>0?(recv/qtdNec*100):0;
+    return {
+      parte: String(row.parte||''), pos: String(row.posicao||''),
+      tipo: String(row.material||''), quant, qtdNec, pesoUnit,
+      kgPrev, kgRecv, recv, conjPrev, conjForm, pct,
+      romValues: romaneioOrder.map(rom => {
+        const v = romaneioDataCM[rom]?.[baseIdx];
+        return v!==''&&v!==undefined?v:'';
+      })
+    };
+  });
+
+  // Aplica filtro
+  let dados = linhas;
+  if(filter==='incompletos') dados=linhas.filter(l=>l.conjForm<l.conjPrev);
+  if(filter==='completos')   dados=linhas.filter(l=>l.conjPrev>0&&l.conjForm>=l.conjPrev);
+
+  const romCols = romaneioOrder.map(r=>`<th class="hl col-rom">${r}</th>`).join('');
+  thead.innerHTML = `<tr><th class="col-sm">Parte</th><th class="col-md">Posição</th><th class="col-md">Tipo</th><th class="col-sm">Qt/Mod</th><th class="col-sm">Nec.</th><th class="hl col-md">Conj.Pr.</th><th class="hl col-md">Kg Prev.</th><th class="hl col-md">Kg Rec.</th><th class="hl col-md">Tot.Rec.</th><th class="hl col-md">Conj.Form.</th><th class="hl col-pct">%</th>${romCols}</tr>`;
+
+  const rTotals = romaneioOrder.map((_,ri)=>`<td>${fmt(dados.reduce((s,l)=>s+(Number(l.romValues[ri])||0),0))}</td>`).join('');
+  tfoot.innerHTML = `<tr><td colspan="5" style="color:var(--text2)">SOMA</td><td>${dados.reduce((s,l)=>s+l.conjPrev,0).toFixed(1)}</td><td>${fmt(dados.reduce((s,l)=>s+l.kgPrev,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.kgRecv,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.recv,0))}</td><td>${fmt(dados.reduce((s,l)=>s+l.conjForm,0))}</td><td></td>${rTotals}</tr>`;
+
+  tbody.innerHTML = dados.map(l=>{
+    const romCells=l.romValues.map(v=>v===''?`<td class="muted">—</td>`:`<td>${fmt(v)}</td>`).join('');
+    return `<tr><td>${l.parte}</td><td>${l.pos}</td><td class="muted">${l.tipo}</td><td>${l.quant}</td><td>${fmt(l.qtdNec)}</td><td class="c-blue">${l.conjPrev.toFixed(2)}</td><td class="c-blue">${fmt(l.kgPrev)}</td><td class="c-blue">${fmt(l.kgRecv)}</td><td class="c-blue">${fmt(l.recv)}</td><td class="${sc(l.conjForm,l.conjPrev)}">${l.conjForm}</td><td>${pBar(l.pct)}</td>${romCells}</tr>`;
+  }).join('');
+  $('recCount').textContent = dados.length+' fixadores';
 }
 
 // ── Exportação Excel ──────────────────────────────────────────
@@ -1122,7 +1268,7 @@ function exportar(modo) {
 
 // ── Limpar romaneios ──────────────────────────────────────────
 $('btnLimparRom').addEventListener('click', () => {
-  romaneioData={}; romaneioOrder=[];
+  romaneioData={}; romaneioDataCM={}; romaneioOrder=[];
   atualizarListaRomaneios();
   recalcular();
   addAlert('info','Sessão de recebimento limpa','Os dados do banco permanecem. Use o Admin para excluir definitivamente.');
