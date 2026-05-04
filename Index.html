@@ -1001,7 +1001,7 @@ async function extractPDF(buf) {
     }
 
     // ── CM: fixadores ────────────────────────────────────────
-    const RCM = /(\d+)\s+(80\d{6})\s+(\d{10})\s+\S+\s+\S+\s+CM\s+\d+\s+\d+\s+(TORRE\s+(?:BASICA|PERNA\s+[\d,]+M|STUB|EXT\s+[\d,]+M)\s+-\s+AS5)\s+((?:PARAFUSO|PORCA|ARRUELA|CALCO|PALNUT|MANCAL|MANILHA)\s+[^0-9]+?)\s+(\d[\d.]*)\s+(\d+[\d.,]*)\s+(\d+[\d.,]*)/g;
+    const RCM = /(\d+)\s+(80\d{6})\s+(\d{10})\s+\S+\s+\S+\s+CM\s+\d+\s+\d+\s+(TORRE\s+(?:BASICA|PERNA\s+[\d,]+M|STUB|EXT\s+[\d,]+M)\s+-\s+AS5)\s+((?:PARAFUSO|PORCA|ARRUELA|CAL[CÇ]O|PALNUT|MANCAL|MANILHA).+?)\s+([\d.]+)\s+(\d+,\d+)\s+([\d.,]+)/gi;
     let mc;
     while((mc=RCM.exec(txt))!==null) {
       const remessa=mc[2], item=parseInt(mc[1]);
@@ -1009,7 +1009,7 @@ async function extractPDF(buf) {
       const parte=descPaToParteFixador(descPA);
       const posicao=skuToPos(skuDesc);
       if(!parte||!posicao) continue;
-      const qtd=parseBR(mc[6].replace(/\./g,'')), pesoUnit=parseBR(mc[7]), pesoTotal=parseBR(mc[8]);
+      const qtd=parseFloat(mc[6].replace(/\./g,'').replace(',','.'))||0, pesoUnit=parseBR(mc[7]), pesoTotal=parseBR(mc[8]);
       if(!qtd||!pesoUnit) continue;
       const cmKey='CM-'+remessa+'-'+parte+'-'+posicao;
       const existing=rows.find(r=>r._cmKey===cmKey);
