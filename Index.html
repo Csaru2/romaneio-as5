@@ -887,7 +887,7 @@ async function carregarRomaneiosDB() {
         if(it.tipo_item==='CM'){ idxCM[k]=(idxCM[k]||0)+it.qtd; }
         else { idx[k]=(idx[k]||0)+it.qtd; }
       });
-      romaneioData[r.numero] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idx[k]!==undefined?idx[k]:''; });
+      romaneioData[r.numero] = baseAS5.map(row => { if(isFix(row)) return ''; const k=row.parte+'-'+row.posicao; return idx[k]!==undefined?idx[k]:''; });
       romaneioDataCM[r.numero] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idxCM[k]!==undefined?idxCM[k]:''; });
     }
   });
@@ -960,7 +960,7 @@ async function processarPDFs(files) {
           const k=transformParte(r.DescPA)+'-'+r.Posicao; idx[k]=(idx[k]||0)+r.Qtd;
         }
       });
-      romaneioData[rom] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idx[k]!==undefined?idx[k]:''; });
+      romaneioData[rom] = baseAS5.map(row => { if(isFix(row)) return ''; const k=row.parte+'-'+row.posicao; return idx[k]!==undefined?idx[k]:''; });
       romaneioDataCM[rom] = baseAS5.map(row => { const k=row.parte+'-'+row.posicao; return idxCM2[k]!==undefined?idxCM2[k]:''; });
       addAlert('success', `Romaneio ${rom} processado`, `${rows.length} itens salvos no banco.`);
       atualizarListaRomaneios();
@@ -1095,12 +1095,19 @@ function transformParte(d) {
 }
 
 // ── Recalcular indicadores ────────────────────────────────────
+function isFix(row) {
+  var mat=(row.material||'').toLowerCase();
+  return ['parafuso','porca','arruela','calço','calco','palnut','mancal','manilha'].some(function(t){return mat.includes(t);});
+}
+
 function recalcular() {
   if(!baseAS5.length) return;
-  const n = baseAS5.length;
+  // Filtra só estruturais (FD)
+  window._baseAS5_FD = baseAS5.filter(function(r){return !isFix(r);});
+  const n = window._baseAS5_FD.length;
   const totalRecv = new Array(n).fill(0);
   let matched = 0;
-  baseAS5.forEach((row,i) => {
+  window._baseAS5_FD.forEach((row,i) => {
     let soma = 0, tem = false;
     romaneioOrder.forEach(rom => {
       const v = romaneioData[rom]?.[i];
@@ -1109,7 +1116,7 @@ function recalcular() {
     totalRecv[i] = tem ? soma : 0;
     if(tem) matched++;
   });
-  const linhas = baseAS5.map((row,i) => {
+  const linhas = window._baseAS5_FD.map((row,i) => {
     const quant   = parseFloat(String(row[idxQuant]||'1').replace(',','.')) || 1;
     const qtdNec  = parseFloat(String(row[idxQtdNec]||'0').replace(',','.')) || 0;
     const pesoUnit= parseFloat(String(row[idxPeso]||'0').replace(',','.')) || 0;
@@ -1152,7 +1159,7 @@ function recalcular() {
   const criticas=partes.filter(p=>p.conjForm===0).length;
   const parciais=partes.filter(p=>p.conjForm>0&&p.conjForm<p.conjPrev).length;
   const completas=partes.filter(p=>p.conjPrev>0&&p.conjForm>=p.conjPrev).length;
-  $('sBase').textContent=n; $('sMatch').textContent=matched; $('sNotFound').textContent=n-matched;
+  $('sBase').textContent=n; // FD only $('sMatch').textContent=matched; $('sNotFound').textContent=n-matched;
   $('sCrit').textContent=criticas; $('sParcial').textContent=parciais; $('sComp').textContent=completas;
   $('statsRec').style.display='grid';
   window._linhas=linhas; window._volumes=volumes; window._partes=partes;
