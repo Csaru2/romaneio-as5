@@ -344,6 +344,10 @@ tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px sol
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/></svg>
         Recebimento
       </button>
+      <button class="nav-item" data-page="fixadores">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+        Rec. Fixadores
+      </button>
       <button class="nav-item" data-page="rnc">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
         Emitir RNC
@@ -417,7 +421,7 @@ tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px sol
             <button class="tab-btn active" onclick="switchRecTab('posicoes')">Posições</button>
             <button class="tab-btn" onclick="switchRecTab('volumes')">Volumes</button>
             <button class="tab-btn" onclick="switchRecTab('partes')">Partes</button>
-            <button class="tab-btn" onclick="switchRecTab('fixadores')">Fixadores</button>
+
           </div>
           <div style="display:flex;gap:.4rem;align-items:center">
             <div class="filter-bar">
@@ -539,6 +543,60 @@ tfoot tr td { background: var(--surface2); font-weight: 600; border-top: 1px sol
         </div>
         <div id="acmpLista">
           <div class="empty-state">Nenhuma RNC encontrada</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FIXADORES ───────────────────────────── -->
+    <div class="page" id="page-fixadores">
+      <div class="page-header">
+        <div class="page-title">Rec. Fixadores</div>
+        <div class="page-sub">Parafusos · Porcas · Arruelas · Calços · Palnuts · Mancais · Manilhas</div>
+      </div>
+
+      <div class="stats-grid stats-grid-4" id="statsFix" style="display:none">
+        <div class="stat-card c-red"><div class="stat-val" id="sfCrit">—</div><div class="stat-lbl">Partes críticas</div></div>
+        <div class="stat-card c-amber"><div class="stat-val" id="sfParcial">—</div><div class="stat-lbl">Partes parciais</div></div>
+        <div class="stat-card c-green"><div class="stat-val" id="sfComp">—</div><div class="stat-lbl">Partes completas</div></div>
+        <div class="stat-card c-blue"><div class="stat-val" id="sfTotal">—</div><div class="stat-lbl">Total fixadores</div></div>
+      </div>
+
+      <div class="grid2" style="margin-bottom:1rem">
+        <div class="card">
+          <div class="card-title">Romaneios processados</div>
+          <div id="fixRomaneioList" style="display:flex;flex-direction:column;gap:.35rem">
+            <div class="empty-state" style="padding:1.5rem">Processe PDFs na aba Rec. Estruturas</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Kg previstos vs recebidos por parte</div>
+          <div id="fixKgChart" style="display:flex;flex-direction:column;gap:.6rem">
+            <div class="empty-state">Processe um romaneio para ver os indicadores</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="fixTabCard" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
+          <div style="font-size:.75rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;font-family:var(--mono)">Fixadores</div>
+          <div style="display:flex;gap:.4rem;align-items:center">
+            <div class="filter-bar">
+              <button class="filter-pill active" id="ffTodos" onclick="setFixFilter('todos')">Todos</button>
+              <button class="filter-pill" id="ffInc" onclick="setFixFilter('incompletos')">Incompletos</button>
+              <button class="filter-pill" id="ffComp" onclick="setFixFilter('completos')">Completos</button>
+            </div>
+            <span style="font-size:.72rem;color:var(--text2);font-family:var(--mono)" id="fixCount"></span>
+          </div>
+        </div>
+        <div class="tbl-wrap" style="max-height:calc(100vh - 340px);min-width:0">
+          <table class="tbl" id="fixTable" style="min-width:max-content">
+            <thead id="fixThead"></thead>
+            <tbody id="fixTbody"></tbody>
+            <tfoot id="fixTfoot"></tfoot>
+          </table>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-green" onclick="exportarFixadores()">↓ Exportar Excel</button>
         </div>
       </div>
     </div>
@@ -736,6 +794,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     $(`page-${btn.dataset.page}`).classList.add('active');
     if(btn.dataset.page==='acompanhamento') carregarRNCs();
+    if(btn.dataset.page==='fixadores') renderFixadores();
     if(btn.dataset.page==='admin' && currentProfile?.role==='admin') { carregarAdminUsers(); carregarAdminRomaneios(); }
   });
 });
@@ -1100,6 +1159,7 @@ function recalcular() {
   renderKgChart(partes);
   renderRecTab(currentRecTab, currentRecFilter);
   $('recTabCard').style.display='block';
+  renderFixadores();
 }
 
 function renderKgChart(partes) {
@@ -1244,6 +1304,133 @@ function renderFixadoresTab(filter, thead, tbody, tfoot) {
     return `<tr><td>${l.parte}</td><td>${l.pos}</td><td class="muted">${l.tipo}</td><td>${l.quant}</td><td>${fmt(l.qtdNec)}</td><td class="c-blue">${l.conjPrev.toFixed(2)}</td><td class="c-blue">${fmt(l.kgPrev)}</td><td class="c-blue">${fmt(l.kgRecv)}</td><td class="c-blue">${fmt(l.recv)}</td><td class="${sc(l.conjForm,l.conjPrev)}">${l.conjForm}</td><td>${pBar(l.pct)}</td>${romCells}</tr>`;
   }).join('');
   $('recCount').textContent = dados.length+' fixadores';
+}
+
+// ── Rec. Fixadores ───────────────────────────────────────────
+let currentFixFilter = 'todos';
+
+function setFixFilter(f) {
+  currentFixFilter = f;
+  ['ffTodos','ffInc','ffComp'].forEach(id => { var el=document.getElementById(id); if(el) el.classList.remove('active'); });
+  var m={'todos':'ffTodos','incompletos':'ffInc','completos':'ffComp'};
+  var el=document.getElementById(m[f]); if(el) el.classList.add('active');
+  renderFixadores();
+}
+
+function calcLinhasFix() {
+  if(!baseAS5.length || !romaneioOrder.length) return [];
+  var linhas = [];
+  baseAS5.forEach(function(row, baseIdx) {
+    var mat = (row.material||'').toLowerCase();
+    var isFix = ['parafuso','porca','arruela','calço','calco','palnut','mancal','manilha'].some(function(t){return mat.includes(t);});
+    if(!isFix) return;
+    var qtdNec  = parseFloat(String(row.qtd_necessaria||'0').replace(',','.')) || 0;
+    var quant   = parseFloat(String(row.quant||'1').replace(',','.')) || 1;
+    var pesoUnit= parseFloat(String(row.peso||'0').replace(',','.')) || 0;
+    var recv = 0;
+    romaneioOrder.forEach(function(rom) {
+      var v = romaneioDataCM[rom] && romaneioDataCM[rom][baseIdx];
+      if(v!==''&&v!==undefined) recv += Number(v);
+    });
+    var kgPrev   = qtdNec * pesoUnit;
+    var kgRecv   = recv * pesoUnit;
+    var conjPrev = quant>0 ? qtdNec/quant : 0;
+    var conjForm = quant>0 ? Math.floor(recv/quant) : 0;
+    var pct      = qtdNec>0 ? (recv/qtdNec*100) : 0;
+    linhas.push({
+      parte: String(row.parte||''), pos: String(row.posicao||''),
+      tipo: String(row.material||''), quant: quant, qtdNec: qtdNec,
+      pesoUnit: pesoUnit, kgPrev: kgPrev, kgRecv: kgRecv,
+      recv: recv, conjPrev: conjPrev, conjForm: conjForm, pct: pct,
+      romValues: romaneioOrder.map(function(rom) {
+        var v = romaneioDataCM[rom] && romaneioDataCM[rom][baseIdx];
+        return (v!==''&&v!==undefined) ? v : '';
+      })
+    });
+  });
+  return linhas;
+}
+
+function renderFixadores() {
+  if(!$('page-fixadores') || !$('page-fixadores').classList.contains('active')) return;
+  var linhas = calcLinhasFix();
+  if(!linhas.length) {
+    $('fixTabCard').style.display='none';
+    $('statsFix').style.display='none';
+    return;
+  }
+  // Stats
+  var criticas  = linhas.filter(function(l){return l.conjForm===0&&l.conjPrev>0;}).length;
+  var parciais  = linhas.filter(function(l){return l.conjForm>0&&l.conjForm<l.conjPrev;}).length;
+  var completas = linhas.filter(function(l){return l.conjPrev>0&&l.conjForm>=l.conjPrev;}).length;
+  $('sfCrit').textContent    = criticas;
+  $('sfParcial').textContent = parciais;
+  $('sfComp').textContent    = completas;
+  $('sfTotal').textContent   = linhas.length;
+  $('statsFix').style.display = 'grid';
+
+  // Kg chart
+  var parteMap = {};
+  linhas.forEach(function(l){
+    if(!parteMap[l.parte]) parteMap[l.parte]={kgPrev:0,kgRecv:0};
+    parteMap[l.parte].kgPrev += l.kgPrev;
+    parteMap[l.parte].kgRecv += l.kgRecv;
+  });
+  var totP=0,totR=0;
+  var barras = Object.keys(parteMap).map(function(p){
+    var kp=parteMap[p].kgPrev, kr=parteMap[p].kgRecv;
+    totP+=kp; totR+=kr;
+    var pct=kp>0?Math.min(kr/kp*100,100):0;
+    var cls=pct>=100?'green':pct>=50?'amber':'red';
+    return '<div><div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.25rem"><span style="color:var(--text2);font-weight:500">'+p+'</span><span style="color:var(--text3);font-family:var(--mono)">'+fmt(kr)+' / '+fmt(kp)+' kg</span></div><div class="prog-row"><div class="prog-track"><div class="prog-fill '+cls+'" style="width:'+pct.toFixed(1)+'%"></div></div><div class="prog-pct">'+pct.toFixed(0)+'%</div></div></div>';
+  }).join('');
+  var totPct=totP>0?Math.min(totR/totP*100,100):0;
+  var totCls=totPct>=100?'green':totPct>=50?'amber':'red';
+  $('fixKgChart').innerHTML = barras +
+    '<div style="border-top:1px solid var(--border);margin-top:.5rem;padding-top:.5rem"><div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.25rem"><span style="color:var(--text);font-weight:700">TOTAL</span><span style="color:var(--accent2);font-family:var(--mono);font-weight:600">'+fmt(totR)+' / '+fmt(totP)+' kg</span></div><div class="prog-row"><div class="prog-track"><div class="prog-fill '+totCls+'" style="width:'+totPct.toFixed(1)+'%"></div></div><div class="prog-pct" style="font-weight:700;color:var(--text)">'+totPct.toFixed(0)+'%</div></div></div>';
+
+  // Table
+  var f=currentFixFilter;
+  var dados=linhas;
+  if(f==='incompletos') dados=linhas.filter(function(l){return l.conjForm<l.conjPrev;});
+  if(f==='completos')   dados=linhas.filter(function(l){return l.conjPrev>0&&l.conjForm>=l.conjPrev;});
+
+  var romCols = romaneioOrder.map(function(r){return '<th class="hl col-rom">'+r+'</th>';}).join('');
+  $('fixThead').innerHTML = '<tr><th class="col-sm">Parte</th><th class="col-md">Posição</th><th class="col-md">Tipo</th><th class="col-sm">Qt/Mod</th><th class="col-sm">Nec.</th><th class="hl col-md">Conj.Pr.</th><th class="hl col-md">Kg Prev.</th><th class="hl col-md">Kg Rec.</th><th class="hl col-md">Tot.Rec.</th><th class="hl col-md">Conj.Form.</th><th class="hl col-pct">%</th>'+romCols+'</tr>';
+
+  var rTotals = romaneioOrder.map(function(_,ri){return '<td>'+fmt(dados.reduce(function(s,l){return s+(Number(l.romValues[ri])||0);},0))+'</td>';}).join('');
+  $('fixTfoot').innerHTML = '<tr><td colspan="5" style="color:var(--text2)">SOMA</td><td>'+dados.reduce(function(s,l){return s+l.conjPrev;},0).toFixed(1)+'</td><td>'+fmt(dados.reduce(function(s,l){return s+l.kgPrev;},0))+'</td><td>'+fmt(dados.reduce(function(s,l){return s+l.kgRecv;},0))+'</td><td>'+fmt(dados.reduce(function(s,l){return s+l.recv;},0))+'</td><td>'+fmt(dados.reduce(function(s,l){return s+l.conjForm;},0))+'</td><td></td>'+rTotals+'</tr>';
+
+  $('fixTbody').innerHTML = dados.map(function(l){
+    var romCells=l.romValues.map(function(v){return v===''?'<td class="muted">—</td>':'<td>'+fmt(v)+'</td>';}).join('');
+    return '<tr><td>'+l.parte+'</td><td>'+l.pos+'</td><td class="muted">'+l.tipo+'</td><td>'+l.quant+'</td><td>'+fmt(l.qtdNec)+'</td><td class="c-blue">'+l.conjPrev.toFixed(2)+'</td><td class="c-blue">'+fmt(l.kgPrev)+'</td><td class="c-blue">'+fmt(l.kgRecv)+'</td><td class="c-blue">'+fmt(l.recv)+'</td><td class="'+sc(l.conjForm,l.conjPrev)+'">'+l.conjForm+'</td><td>'+pBar(l.pct)+'</td>'+romCells+'</tr>';
+  }).join('');
+
+  $('fixCount').textContent = dados.length+' fixadores';
+  $('fixTabCard').style.display = 'block';
+
+  // Atualiza lista de romaneios na sidebar
+  var keys = Object.keys(romaneiosDB);
+  $('fixRomaneioList').innerHTML = keys.length ? keys.map(function(r){
+    var info=romaneiosDB[r];
+    var hasCM = info.romaneio_itens&&info.romaneio_itens.some(function(i){return i.tipo_item==='CM';});
+    return '<div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;background:var(--surface2);border-radius:7px;font-size:.75rem;font-family:var(--mono)"><span style="color:var(--accent2);font-weight:600">'+r+'</span><span style="color:var(--text3)">·</span><span style="color:var(--text2)">'+(info.arquivo_nome||'—')+'</span><span style="color:var(--text3);margin-left:auto">'+(hasCM?'CM':'sem fixadores')+'</span></div>';
+  }).join('') : '<div class="empty-state" style="padding:1.5rem">Processe PDFs na aba Rec. Estruturas</div>';
+}
+
+function exportarFixadores() {
+  var linhas = calcLinhasFix();
+  if(!linhas.length){addAlert('warning','Sem dados','Processe um romaneio com fixadores.');return;}
+  var f=currentFixFilter;
+  if(f==='incompletos') linhas=linhas.filter(function(l){return l.conjForm<l.conjPrev;});
+  if(f==='completos')   linhas=linhas.filter(function(l){return l.conjPrev>0&&l.conjForm>=l.conjPrev;});
+  var header=['Parte','Posição','Tipo','Qt/Módulo','Qtd Nec.','Conj.Prev.'].concat(romaneioOrder).concat(['Kg Prev.','Kg Rec.','Tot.Rec.','Conj.Form.','%']);
+  var rows=linhas.map(function(l){return [l.parte,l.pos,l.tipo,l.quant,l.qtdNec,+l.conjPrev.toFixed(4)].concat(romaneioOrder.map(function(_,i){return l.romValues[i]===''?'':+l.romValues[i];})).concat([+l.kgPrev.toFixed(3),+l.kgRecv.toFixed(3),l.recv,l.conjForm,+l.pct.toFixed(2)]);});
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet([header].concat(rows));
+  XLSX.utils.book_append_sheet(wb,ws,'Fixadores');
+  XLSX.writeFile(wb,'Fixadores_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  addAlert('success','Excel exportado!',linhas.length+' fixadores exportados.');
 }
 
 // ── Exportação Excel ──────────────────────────────────────────
