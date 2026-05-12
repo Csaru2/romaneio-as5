@@ -909,45 +909,60 @@ $('as5FileInput').onchange = () => { if($('as5FileInput').files[0]) uploadAS5($(
 
 async function uploadAS5(file) {
   $('as5Progress').style.display = 'block';
-  $('as5ProgressText').textContent = 'Lendo planilha...';
   try {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
-    if(raw.length < 2) throw new Error('Planilha vazia ou sem dados');
-    const headers = raw[0].map(h => h?.toString().trim().toLowerCase());
-    const rows = raw.slice(1).filter(r => r.some(c => c !== ''));
-    const hi = n => headers.findIndex(h => h.includes(n));
-    const hVol = hi('volume'), hParte = hi('parte'), hPos = hi('posição')||hi('posicao');
-    const hQuant = hi('quant'), hMat = hi('material'), hComp = hi('comprimento');
-    const hPeso = hi('peso'), hQtdNec = hi('qtd nec');
-    if(hPos===-1 || hQuant===-1) throw new Error('Colunas Posição e Quant. não encontradas');
-    $('as5ProgressText').textContent = `Processando ${rows.length} linhas...`;
-    const toInsert = rows.map(r => ({
-      volume: hVol>=0 ? String(r[hVol]||'') : null,
-      parte: String(r[hParte]||'').replace(/,(\d)/g,'.$1'),
-      posicao: String(r[hPos]||'').replace(/,(\d)/g,'.$1'),
-      quant: parseFloat(String(r[hQuant]||'0').replace(',','.')) || 1,
-      material: hMat>=0 ? String(r[hMat]||'') : null,
-      comprimento: hComp>=0 ? parseFloat(String(r[hComp]||'0').replace(',','.')) || null : null,
-      peso: hPeso>=0 ? parseFloat(String(r[hPeso]||'0').replace(',','.')) || null : null,
-      qtd_necessaria: hQtdNec>=0 ? parseFloat(String(r[hQtdNec]||'0').replace(',','.')) || 0 : 0,
-      atualizado_por: currentUser.id
-    }));
-    $('as5ProgressText').textContent = `Enviando ${toInsert.length} linhas...`;
-    // RPC: trunca e reinsere em uma única transação no servidor
-    const { data: totalInserido, error: rpcErr } = await sb.rpc('reimportar_base_as5', {
-      linhas: toInsert,
-      usuario_id: currentUser.id
+
+    // Processa cada aba — mapeia nome da aba para sigla torre
+    const SHEETS = [];
+    wb.SheetNames.forEach(function(sn) {
+      var t = sn.trim().toUpperCase();
+      if(t==='AS5' || t==='IV5') SHEETS.push({name:sn, torre:t});
     });
-    if(rpcErr) throw new Error(rpcErr.message);
-    $('as5InfoText').textContent = `${totalInserido || toInsert.length} linhas · atualizado agora`;
+    if(!SHEETS.length) {
+      // fallback: primeira aba = AS5
+      SHEETS.push({name:wb.SheetNames[0], torre:'AS5'});
+    }
+
+    var totalGeral = 0;
+    for(var si=0; si<SHEETS.length; si++) {
+      var sh = SHEETS[si];
+      $('as5ProgressText').textContent = 'Lendo aba ' + sh.torre + '...';
+      var ws = wb.Sheets[sh.name];
+      var raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      if(raw.length < 2) continue;
+      var headers = raw[0].map(function(h){return (h||'').toString().trim().toLowerCase();});
+      var rows = raw.slice(1).filter(function(r){return r.some(function(c){return c!=='';});});
+      var hi = function(n){return headers.findIndex(function(h){return h.includes(n);});};
+      var hVol=hi('volume'), hParte=hi('parte'), hPos=hi('posição')>=0?hi('posição'):hi('posicao');
+      var hQuant=hi('quant'), hMat=hi('material'), hComp=hi('comprimento');
+      var hPeso=hi('peso'), hQtdNec=hi('qtd nec')>=0?hi('qtd nec'):hi('qtd');
+      if(hPos===-1||hQuant===-1) { addAlert('warning','Aba '+sh.torre+' sem colunas Posição/Quant — ignorada',''); continue; }
+      $('as5ProgressText').textContent = 'Processando ' + rows.length + ' linhas ' + sh.torre + '...';
+      var toInsert = rows.map(function(r){return {
+        volume:   hVol>=0  ? String(r[hVol]||'')  : null,
+        parte:    String(r[hParte]||'').replace(/,(\d)/g,'.$1'),
+        posicao:  String(r[hPos]||'').replace(/,(\d)/g,'.$1'),
+        quant:    parseFloat(String(r[hQuant]||'0').replace(',','.')) || 1,
+        material: hMat>=0  ? String(r[hMat]||'')  : null,
+        comprimento: hComp>=0 ? String(r[hComp]||'')  : null,
+        peso:     hPeso>=0 ? parseFloat(String(r[hPeso]||'0').replace(',','.')) || null : null,
+        qtd_necessaria: hQtdNec>=0 ? parseFloat(String(r[hQtdNec]||'0').replace(',','.')) || 0 : 0
+      };});
+      $('as5ProgressText').textContent = 'Enviando ' + toInsert.length + ' linhas ' + sh.torre + '...';
+      var rpc = await sb.rpc('reimportar_base_as5', { linhas: toInsert, usuario_id: currentUser.id, p_torre: sh.torre });
+      if(rpc.error) throw new Error('['+sh.torre+'] ' + rpc.error.message);
+      var inserted = rpc.data?.inserted || toInsert.length;
+      totalGeral += inserted;
+      addAlert('success', 'Aba ' + sh.torre + ' importada!', inserted + ' linhas inseridas.');
+    }
+
+    $('as5InfoText').textContent = totalGeral + ' linhas · atualizado agora';
     await carregarBaseAS5();
     await carregarBaseIV5();
-    addAlert('success', 'Base AS5 atualizada!', `${totalInserido || toInsert.length} linhas importadas em 1 operação.`);
+    recalcular();
   } catch(e) {
-    addAlert('error', 'Erro ao importar AS5', e.message);
+    addAlert('error', 'Erro ao importar base', e.message);
   }
   $('as5Progress').style.display = 'none';
 }
