@@ -913,49 +913,58 @@ async function uploadAS5(file) {
   try {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+    if(raw.length < 2) throw new Error('Planilha vazia ou sem dados');
 
-    // Processa cada aba — mapeia nome da aba para sigla torre
-    const SHEETS = [];
-    wb.SheetNames.forEach(function(sn) {
-      var t = sn.trim().toUpperCase();
-      if(t==='AS5' || t==='IV5') SHEETS.push({name:sn, torre:t});
+    var headers = raw[0].map(function(h){ return (h||'').toString().trim().toLowerCase(); });
+    var rows    = raw.slice(1).filter(function(r){ return r.some(function(c){ return c!==''; }); });
+    var hi = function(n){ return headers.findIndex(function(h){ return h.includes(n); }); };
+
+    // Detecta formato: nova planilha tem coluna "sigla", antiga tinha abas separadas
+    var hSigla  = hi('sigla');
+    var hVol    = hi('volume');
+    var hParte  = hi('parte');
+    var hPos    = hi('posi');   // pega "posição" ou "posicao"
+    var hQuant  = hi('quant');
+    var hMat    = hi('material');
+    var hComp   = hi('comprimento');
+    var hPeso   = hi('peso');
+    var hQtdNec = hi('qtd nec') >= 0 ? hi('qtd nec') : hi('qtd n');
+
+    if(hPos === -1 || hQuant === -1) throw new Error('Colunas Posição e Quant. não encontradas');
+
+    $('as5ProgressText').textContent = 'Processando ' + rows.length + ' linhas...';
+
+    // Separa por torre usando coluna Sigla (novo formato) ou assume AS5 (legado)
+    var byTorre = { AS5: [], IV5: [] };
+    rows.forEach(function(r) {
+      var torre = hSigla >= 0 ? String(r[hSigla]||'AS5').trim().toUpperCase() : 'AS5';
+      if(torre !== 'AS5' && torre !== 'IV5') return; // ignora EXC e linhas inválidas
+      var obj = {
+        volume:         hVol   >= 0 ? String(r[hVol]  ||'').replace(/,(\d)/g,'.$1') : null,
+        parte:          String(r[hParte]||'').replace(/,(\d)/g,'.$1'),
+        posicao:        String(r[hPos]  ||'').replace(/,(\d)/g,'.$1'),
+        quant:          parseFloat(String(r[hQuant]||'1').replace(',','.')) || 1,
+        material:       hMat   >= 0 ? String(r[hMat]  ||'') : null,
+        comprimento:    hComp  >= 0 ? String(r[hComp] ||'') : null,
+        peso:           hPeso  >= 0 ? parseFloat(String(r[hPeso]||'0').replace(',','.')) || null : null,
+        qtd_necessaria: hQtdNec>= 0 ? parseFloat(String(r[hQtdNec]||'0').replace(',','.')) || 0 : 0
+      };
+      if(!obj.parte || !obj.posicao) return; // ignora linhas sem parte/posição
+      byTorre[torre].push(obj);
     });
-    if(!SHEETS.length) {
-      // fallback: primeira aba = AS5
-      SHEETS.push({name:wb.SheetNames[0], torre:'AS5'});
-    }
 
     var totalGeral = 0;
-    for(var si=0; si<SHEETS.length; si++) {
-      var sh = SHEETS[si];
-      $('as5ProgressText').textContent = 'Lendo aba ' + sh.torre + '...';
-      var ws = wb.Sheets[sh.name];
-      var raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
-      if(raw.length < 2) continue;
-      var headers = raw[0].map(function(h){return (h||'').toString().trim().toLowerCase();});
-      var rows = raw.slice(1).filter(function(r){return r.some(function(c){return c!=='';});});
-      var hi = function(n){return headers.findIndex(function(h){return h.includes(n);});};
-      var hVol=hi('volume'), hParte=hi('parte'), hPos=hi('posição')>=0?hi('posição'):hi('posicao');
-      var hQuant=hi('quant'), hMat=hi('material'), hComp=hi('comprimento');
-      var hPeso=hi('peso'), hQtdNec=hi('qtd nec')>=0?hi('qtd nec'):hi('qtd');
-      if(hPos===-1||hQuant===-1) { addAlert('warning','Aba '+sh.torre+' sem colunas Posição/Quant — ignorada',''); continue; }
-      $('as5ProgressText').textContent = 'Processando ' + rows.length + ' linhas ' + sh.torre + '...';
-      var toInsert = rows.map(function(r){return {
-        volume:   hVol>=0  ? String(r[hVol]||'')  : null,
-        parte:    String(r[hParte]||'').replace(/,(\d)/g,'.$1'),
-        posicao:  String(r[hPos]||'').replace(/,(\d)/g,'.$1'),
-        quant:    parseFloat(String(r[hQuant]||'0').replace(',','.')) || 1,
-        material: hMat>=0  ? String(r[hMat]||'')  : null,
-        comprimento: hComp>=0 ? String(r[hComp]||'')  : null,
-        peso:     hPeso>=0 ? parseFloat(String(r[hPeso]||'0').replace(',','.')) || null : null,
-        qtd_necessaria: hQtdNec>=0 ? parseFloat(String(r[hQtdNec]||'0').replace(',','.')) || 0 : 0
-      };});
-      $('as5ProgressText').textContent = 'Enviando ' + toInsert.length + ' linhas ' + sh.torre + '...';
-      var rpc = await sb.rpc('reimportar_base_as5', { linhas: toInsert, usuario_id: currentUser.id, p_torre: sh.torre });
-      if(rpc.error) throw new Error('['+sh.torre+'] ' + rpc.error.message);
-      var inserted = rpc.data?.inserted || toInsert.length;
+    for(var torre of ['AS5','IV5']) {
+      var linhas = byTorre[torre];
+      if(!linhas.length) continue;
+      $('as5ProgressText').textContent = 'Enviando ' + linhas.length + ' linhas ' + torre + '...';
+      var rpc = await sb.rpc('reimportar_base_as5', { linhas: linhas, usuario_id: currentUser.id, p_torre: torre });
+      if(rpc.error) throw new Error('[' + torre + '] ' + rpc.error.message);
+      var inserted = rpc.data?.inserted || linhas.length;
       totalGeral += inserted;
-      addAlert('success', 'Aba ' + sh.torre + ' importada!', inserted + ' linhas inseridas.');
+      addAlert('success', torre + ' importado!', inserted + ' linhas inseridas.');
     }
 
     $('as5InfoText').textContent = totalGeral + ' linhas · atualizado agora';
