@@ -870,7 +870,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
 
 // ── Base AS5 do Supabase ──────────────────────────────────────
 async function carregarBaseAS5() {
-  const { data, error } = await sb.from('base_as5').select('*').order('id');
+  const { data, error } = await sb.from('base_as5').select('*').eq('torre','AS5').order('id');
   if(error || !data?.length) { $('as5InfoText').textContent = 'Nenhuma base no banco — faça upload pelo Admin'; return; }
   processarBaseAS5Rows(data);
   const d = data[0];
@@ -886,6 +886,7 @@ async function carregarBaseIV5() {
     peso:r.peso, qtd_necessaria:r.qtd_necessaria, torre:r.torre
   }));
   console.log('Base IV5 carregada:', baseIV5.length, 'linhas');
+  reconstruirDadosIV5();
 }
 
 function processarBaseAS5Rows(rows) {
@@ -1239,6 +1240,24 @@ function isFix(row) {
   return ['parafuso','porca','arruela','calço','calco','palnut','mancal','manilha'].some(function(t){return mat.includes(t);});
 }
 
+function reconstruirDadosIV5() {
+  if(!baseIV5.length) return;
+  Object.keys(romaneiosDB).forEach(function(num) {
+    var r = romaneiosDB[num];
+    if(!r || !r.romaneio_itens) return;
+    var idxFD={}, idxCM={};
+    r.romaneio_itens.forEach(function(it) {
+      var torre2 = it.torre||'AS5';
+      if(torre2!=='IV5') return;
+      var k = it.parte+'-'+it.posicao;
+      if(it.tipo_item==='CM'){idxCM[k]=(idxCM[k]||0)+it.qtd;}
+      else{idxFD[k]=(idxFD[k]||0)+it.qtd;}
+    });
+    romaneioDataIV5[num]   = baseIV5.filter(function(row){return !isFix(row);}).map(function(row){var k=row.parte+'-'+row.posicao;return idxFD[k]!==undefined?idxFD[k]:'';});
+    romaneioDataCMIV5[num] = baseIV5.map(function(row){var k=row.parte+'-'+row.posicao;return idxCM[k]!==undefined?idxCM[k]:'';});
+  });
+}
+
 function recalcular() {
   if(!baseAS5.length) return;
   // Filtra só estruturais (FD)
@@ -1305,6 +1324,7 @@ function recalcular() {
   renderKgChart(partes);
   renderRecTab(currentRecTab, currentRecFilter);
   $('recTabCard').style.display='block';
+  reconstruirDadosIV5();
   renderFixadores();
   renderFixadoresIV5();
   renderEstruturaIV5();
